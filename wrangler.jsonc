@@ -21,7 +21,7 @@
   "routes": [
     {
       "pattern": "myland.somebyte.org/web*",
-      "zone_name": "emos.somebyte.org"
+      "zone_name": "somebyte.org"
     }
   ]
 }
