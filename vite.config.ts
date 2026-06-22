@@ -5,7 +5,7 @@ import {fileURLToPath, URL} from 'node:url'
 
 // https://vite.dev/config/
 export default defineConfig({
-    base: '/web',
+    base: '/',
     plugins: [vue(), tailwindcss()],
     build: {
         emptyOutDir: true,
