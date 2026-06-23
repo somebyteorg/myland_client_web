@@ -9,7 +9,7 @@ import './style.css'
 const pinia = createPinia()
 pinia.use(
     createPersistedState({
-        key: (id) => `store_${id}`,
+        key: (id) => `store_web_${id}`,
     }),
 )
 app.use(pinia)
