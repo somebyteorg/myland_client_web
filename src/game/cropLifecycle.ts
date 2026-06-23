@@ -86,6 +86,7 @@ export function updateLocalCropLifecycle(
     for (const tile of tiles) {
         if (!tile.plant || !tile.cropStatus) continue
 
+        const previousStatus = tile.cropStatus
         const nextState = getLocalCropState(tile, (status) => canHarvest(tile, status), now)
         if (!nextState) continue
 
@@ -98,6 +99,9 @@ export function updateLocalCropLifecycle(
             tile.status = nextState.status
             if (nextState.cropStatus !== 'seed') tile.cropGrowsAtMs = null
             if (isCropFinalStatus(nextState.cropStatus)) tile.cropMaturesAtMs = null
+            if (!isCropFinalStatus(previousStatus) && isCropHarvestableStatus(nextState.cropStatus) && tile.ownerType === 'neighbor') {
+                tile.isCanStolen = true
+            }
             changed = true
         }
     }
