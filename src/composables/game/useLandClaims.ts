@@ -13,6 +13,10 @@ import type {GameItem, ItemInventoryEntry} from '@/game/types'
 
 export type LandPlacementMode = 'pioneer' | 'deed'
 
+export interface RefreshClaimInventoryOptions {
+    extraItemIds?: number[]
+}
+
 interface UseLandClaimsOptions {
     mapReady: ComputedRef<boolean>
     hasOwnHomeOnCurrentMap: ComputedRef<boolean>
@@ -179,7 +183,7 @@ export function useLandClaims(options: UseLandClaimsOptions) {
         }
     }
 
-    async function refreshClaimInventory() {
+    async function refreshClaimInventory(refreshOptions: RefreshClaimInventoryOptions = {}) {
         const playerId = options.getPlayerId()
         const seedItemIds = getTrackedSeedItemIds()
         if (!playerId) {
@@ -192,7 +196,7 @@ export function useLandClaims(options: UseLandClaimsOptions) {
             return
         }
 
-        const itemIds = getTrackedInventoryItemIds(seedItemIds)
+        const itemIds = getTrackedInventoryItemIds(seedItemIds, refreshOptions.extraItemIds)
         claimInventory.pioneerToken = 0
         claimInventory.landDeed = 0
         claimInventory.playerStatueToken = 0
@@ -246,12 +250,15 @@ export function useLandClaims(options: UseLandClaimsOptions) {
         ))
     }
 
-    function getTrackedInventoryItemIds(seedItemIds: number[]) {
+    function getTrackedInventoryItemIds(seedItemIds: number[], extraItemIds: number[] = []) {
         const itemIds = [
             ...seedItemIds,
             ITEM_ID_CURRENCY_GRAIN,
             ITEM_ID_CURRENCY_STONE,
             ITEM_ID_PROP_PLAYER_STATUE,
+            ...extraItemIds
+                .map((itemId) => Number(itemId))
+                .filter((itemId) => Number.isFinite(itemId) && itemId > 0),
         ]
 
         if (options.mapReady.value) {
