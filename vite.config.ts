@@ -24,9 +24,10 @@ export default defineConfig({
                 target: 'http://10.6.2.51:8000',
                 changeOrigin: true,
             },
-            '/sse': {
-                target: 'http://10.6.2.51:8001',
+            '/io': {
+                target: 'http://10.6.2.51:8002',
                 changeOrigin: true,
+                ws: true,
             },
         },
     },

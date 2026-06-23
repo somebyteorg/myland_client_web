@@ -1,5 +1,5 @@
 <template>
-  <GameEventStream v-if="authReady" :player-id="sign.player_id"/>
+  <GameEventStream v-if="authReady" :player-id="sign.player_id" :token="sign.user_token"/>
   <GameView v-if="authReady"/>
   <main v-else class="grid min-h-screen place-items-center bg-[#f7edd5] text-[#3d3324]">
     <section class="rounded-lg border border-[#d8c18d] bg-[#fff9e8]/90 px-8 py-6 text-center shadow-xl">

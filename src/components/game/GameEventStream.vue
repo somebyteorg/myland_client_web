@@ -2,17 +2,26 @@
 
 <script setup lang="ts">
 import {onBeforeUnmount, watch} from 'vue'
+import {io} from 'socket.io-client'
+import type {Socket} from 'socket.io-client'
 import {emitGameEvent} from '@/composables/useGameEventBus'
 
-const FORWARDED_SSE_EVENT_NAMES = [
+const SOCKET_IO_PATH = '/io/'
+const ROOM_NAME_CHAT_NAMELESS = 'chat_nameless'
+const ROOM_NAME_MAP_NAMELESS = 'map_nameless'
+const REALTIME_ROOM_NAMES = [
+  ROOM_NAME_CHAT_NAMELESS,
+  ROOM_NAME_MAP_NAMELESS,
+] as const
+const FORWARDED_REALTIME_EVENT_NAMES = [
   'chat_message_new',
   'map_item',
   'map_land_chunk',
   'map_land_abandoned',
   'online_count',
 ] as const
-const RECONNECT_BASE_DELAY_MS = 1000
-const RECONNECT_MAX_DELAY_MS = 12000
+const RECONNECT_DELAY_MS = 1000
+const RECONNECT_DELAY_MAX_MS = 12000
 const DISCONNECTED_NOTICE = {
   message: '世界已断开正在重联',
   autoClose: true,
@@ -22,96 +31,132 @@ const DISCONNECTED_NOTICE = {
 
 const props = defineProps<{
   playerId: string
+  token: string
 }>()
 
-type ForwardedSseEventName = typeof FORWARDED_SSE_EVENT_NAMES[number]
+type RealtimeCredentials = {
+  playerId: string
+  token: string
+}
+type ForwardedRealtimeEventName = typeof FORWARDED_REALTIME_EVENT_NAMES[number]
 
-let eventSource: EventSource | null = null
-let reconnectTimer: number | null = null
-let reconnectAttempt = 0
-let currentPlayerId = ''
+let activeSocket: Socket | null = null
 let disconnectedNoticeShown = false
 
 watch(
-    () => props.playerId,
-    (playerId) => {
-      connectPlayerEventStream(playerId)
+    () => [props.playerId, props.token] as const,
+    ([playerId, token]) => {
+      syncRealtimeConnection(playerId, token)
     },
     {immediate: true},
 )
 
 onBeforeUnmount(() => {
-  stopEventStream()
+  stopRealtimeSocket()
 })
 
-function connectPlayerEventStream(playerId: string) {
+function syncRealtimeConnection(playerId: string, token: string) {
   resetConnectionState()
 
-  const normalizedPlayerId = playerId.trim()
-  if (!normalizedPlayerId) return
+  const credentials = normalizeCredentials(playerId, token)
+  if (!credentials) return
 
-  currentPlayerId = normalizedPlayerId
-  openCurrentPlayerEventStream()
+  openRealtimeSocket(credentials)
 }
 
-function openCurrentPlayerEventStream() {
-  if (!currentPlayerId) return
+function normalizeCredentials(playerId: string, token: string): RealtimeCredentials | null {
+  const normalizedPlayerId = playerId.trim()
+  const normalizedToken = token.trim()
+  if (!normalizedPlayerId || !normalizedToken) return null
 
-  try {
-    const nextEventSource = new EventSource(getEventStreamUrl(currentPlayerId))
-    eventSource = nextEventSource
-    bindEventSourceLifecycle(nextEventSource)
-    forwardServerEvents(nextEventSource)
-  } catch {
-    handleEventStreamDisconnect()
+  return {
+    playerId: normalizedPlayerId,
+    token: normalizedToken,
   }
 }
 
-function stopEventStream() {
+function openRealtimeSocket(credentials: RealtimeCredentials) {
+  try {
+    const socket = createRealtimeSocket(credentials)
+    activeSocket = socket
+    bindSocketLifecycle(socket)
+    forwardRealtimeEvents(socket)
+    socket.connect()
+  } catch (error) {
+    notifyDisconnected()
+    console.error('Socket.IO create failed', error)
+  }
+}
+
+function stopRealtimeSocket() {
   resetConnectionState()
-  currentPlayerId = ''
 }
 
 function resetConnectionState() {
-  clearReconnectTimer()
-  reconnectAttempt = 0
   disconnectedNoticeShown = false
-  closeCurrentEventSource()
+  closeActiveSocket()
 }
 
-function getEventStreamUrl(playerId: string) {
-  return `/sse/${encodeURIComponent(playerId)}`
+function createRealtimeSocket(credentials: RealtimeCredentials) {
+  return io({
+    path: SOCKET_IO_PATH,
+    auth: {
+      token: credentials.token,
+      player_id: credentials.playerId,
+    },
+    reconnectionDelay: RECONNECT_DELAY_MS,
+    reconnectionDelayMax: RECONNECT_DELAY_MAX_MS,
+    autoConnect: false,
+  })
 }
 
-function bindEventSourceLifecycle(source: EventSource) {
-  source.onopen = handleEventStreamOpen
-  source.onerror = handleEventStreamDisconnect
+function bindSocketLifecycle(socket: Socket) {
+  socket.on('connect', () => handleSocketConnect(socket))
+  socket.on('disconnect', notifyDisconnected)
+  socket.on('connect_error', handleSocketConnectError)
 }
 
-function handleEventStreamOpen() {
-  reconnectAttempt = 0
+function handleSocketConnect(socket: Socket) {
   disconnectedNoticeShown = false
+  joinRealtimeRooms(socket)
 }
 
-function forwardServerEvents(source: EventSource) {
-  for (const eventName of FORWARDED_SSE_EVENT_NAMES) {
-    source.addEventListener(eventName, (event) => {
-      forwardServerEvent(eventName, event)
+function forwardRealtimeEvents(socket: Socket) {
+  for (const eventName of FORWARDED_REALTIME_EVENT_NAMES) {
+    socket.on(eventName, (payload: unknown) => {
+      forwardRealtimeEvent(eventName, payload)
     })
   }
 }
 
-function closeCurrentEventSource() {
-  if (!eventSource) return
-
-  eventSource.close()
-  eventSource = null
+function joinRealtimeRooms(socket: Socket) {
+  emitRoomCommand(socket, 'join')
 }
 
-function handleEventStreamDisconnect() {
-  closeCurrentEventSource()
+function closeActiveSocket() {
+  if (!activeSocket) return
+
+  leaveRealtimeRooms(activeSocket)
+  activeSocket.removeAllListeners()
+  activeSocket.disconnect()
+  activeSocket = null
+}
+
+function leaveRealtimeRooms(socket: Socket) {
+  emitRoomCommand(socket, 'leave')
+}
+
+function emitRoomCommand(socket: Socket, command: 'join' | 'leave') {
+  if (!socket.connected) return
+
+  for (const roomName of REALTIME_ROOM_NAMES) {
+    socket.emit(command, roomName)
+  }
+}
+
+function handleSocketConnectError(error: Error) {
   notifyDisconnected()
-  scheduleReconnect()
+  console.error('Socket.IO connect failed', error)
 }
 
 function notifyDisconnected() {
@@ -123,33 +168,22 @@ function notifyDisconnected() {
   })
 }
 
-function scheduleReconnect() {
-  if (!currentPlayerId || reconnectTimer !== null) return
+function forwardRealtimeEvent(eventName: ForwardedRealtimeEventName, payload: unknown) {
+  const eventPayload = parseRealtimePayload(eventName, payload)
+  if (eventPayload === undefined) return
 
-  reconnectAttempt += 1
-  const delayMs = Math.min(RECONNECT_BASE_DELAY_MS * 2 ** (reconnectAttempt - 1), RECONNECT_MAX_DELAY_MS)
-
-  reconnectTimer = window.setTimeout(() => {
-    reconnectTimer = null
-    openCurrentPlayerEventStream()
-  }, delayMs)
+  emitGameEvent(eventName, eventPayload)
 }
 
-function clearReconnectTimer() {
-  if (reconnectTimer === null) return
-
-  window.clearTimeout(reconnectTimer)
-  reconnectTimer = null
-}
-
-function forwardServerEvent(eventName: ForwardedSseEventName, event: Event) {
-  const messageEvent = event as MessageEvent<string>
-  if (!messageEvent.data) return
+function parseRealtimePayload(eventName: ForwardedRealtimeEventName, payload: unknown) {
+  if (typeof payload !== 'string') return payload
+  if (!payload) return undefined
 
   try {
-    emitGameEvent(eventName, JSON.parse(messageEvent.data) as unknown)
+    return JSON.parse(payload) as unknown
   } catch (error) {
-    console.error(`SSE ${eventName} parse failed`, error)
+    console.error(`Socket.IO ${eventName} parse failed`, error)
+    return undefined
   }
 }
 </script>
