@@ -28,6 +28,11 @@ function syncAuthFromUrl() {
   const token = getQueryValue(url, 'token')
   const playerId = getQueryValue(url, 'player_id')
 
+  // emos 支付回调会带no
+  if (token || getQueryValue(url, 'no')) {
+    window.history.replaceState(window.history.state, document.title, `/web?player_id=${playerId}`)
+  }
+
   if (!playerId) {
     sign.clearPlayerId()
     redirectToLogin()
@@ -36,7 +41,6 @@ function syncAuthFromUrl() {
 
   if (token) {
     sign.setAuth(token, playerId)
-    window.history.replaceState(window.history.state, document.title, `/web?player_id=${playerId}`)
     authReady.value = true
     return
   }
