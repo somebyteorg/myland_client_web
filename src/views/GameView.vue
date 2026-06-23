@@ -198,6 +198,8 @@ const LAND_CHUNK_API_MAX_SIZE = 100
 const LAND_CHUNK_TARGET_SIZE = 20
 const LAND_CHUNK_VIEW_PADDING = 3
 let mapInitializeVersion = 0
+const queuedMapLandChunks = new Map<string, MapLandChunkItem>()
+let queuedMapLandChunkFrame: number | null = null
 
 interface MapItemRefreshEvent {
   map_file_id: number
@@ -301,7 +303,36 @@ function getMapItemRefreshRect(event: MapItemRefreshEvent): LandChunkRequest {
 function handleMapLandChunkEvent(event: MapLandChunkEvent) {
   if (!isCurrentMapEvent(event.map_file_id)) return
 
-  applyMapLandChunk([event.chunk])
+  queueMapLandChunk(event.chunk)
+}
+
+function queueMapLandChunk(chunk: MapLandChunkItem) {
+  queuedMapLandChunks.set(`${chunk.x},${chunk.y}`, chunk)
+  if (queuedMapLandChunkFrame !== null) return
+
+  queuedMapLandChunkFrame = window.requestAnimationFrame(flushQueuedMapLandChunks)
+}
+
+function flushQueuedMapLandChunks() {
+  queuedMapLandChunkFrame = null
+  if (!mapReady.value) {
+    queuedMapLandChunks.clear()
+    return
+  }
+
+  const chunks = Array.from(queuedMapLandChunks.values())
+  queuedMapLandChunks.clear()
+  if (chunks.length === 0) return
+
+  applyMapLandChunk(chunks)
+}
+
+function resetQueuedMapLandChunks() {
+  if (queuedMapLandChunkFrame !== null) {
+    window.cancelAnimationFrame(queuedMapLandChunkFrame)
+    queuedMapLandChunkFrame = null
+  }
+  queuedMapLandChunks.clear()
 }
 
 function handleMapLandAbandonedEvent(event: MapLandAbandonedEvent) {
@@ -830,6 +861,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   mapInitializeVersion += 1
+  resetQueuedMapLandChunks()
   resetLandChunkLoader()
   toastStack.clearToasts()
   window.removeEventListener('resize', handleResize)
@@ -907,6 +939,7 @@ function centerInitialMapFallback() {
 }
 
 function resetLandChunkState() {
+  resetQueuedMapLandChunks()
   resetLandChunkLoader()
   resetCropActions()
 }
