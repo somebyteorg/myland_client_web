@@ -3,7 +3,7 @@ import {useSignStore} from '@/stores/sign'
 import {MAP_FILE_ID_NAMELESS} from '@/constants'
 import {createBaseMapJson, createBaseTerrainLookup} from './baseMapUtils'
 import type {LandChunkRequest} from './landChunks'
-import type {BaseTerrain, MapItemResponse, MapTerrainResponse} from './types'
+import type {BaseTerrain, MapItemResponse, MapPlayerHomeItem, MapTerrainResponse} from './types'
 
 let baseTerrainAt = (_x: number, _y: number): BaseTerrain => 'mountain'
 
@@ -32,6 +32,11 @@ export async function loadMapItems(mapId: number = MAP_FILE_ID_NAMELESS, rect?: 
     return api.get(`api/map/${mapId}/item`, {
         searchParams,
     }).json<MapItemResponse[]>()
+}
+
+export async function loadMapPlayerHome(playerId: string, mapId: number = MAP_FILE_ID_NAMELESS) {
+    return api.get(`api/map/${encodeURIComponent(String(mapId))}/plyaer/${encodeURIComponent(playerId)}/home`)
+        .json<MapPlayerHomeItem[]>()
 }
 
 export function isRiverTile(x: number, y: number) {

@@ -173,6 +173,7 @@ import {
   tileSize,
 } from '@/game/config'
 import {isRiverTile as isBaseRiverTile} from '@/game/baseMap'
+import {loadMapItems, loadMapPlayerHome} from '@/game/baseMap'
 import {loadMapLandChunk} from '@/game/landData'
 import {createUnclaimedGrassPatch} from '@/game/tileState'
 import {
@@ -188,8 +189,10 @@ import type {
   ContextMenuState,
   FilterKey,
   GameItem,
+  MapItemResponse,
   MapLandChunkItem,
   MapObject,
+  MapPlayerHomeItem,
   Tile,
 } from '@/game/types'
 
@@ -442,6 +445,7 @@ const {
   butterflyAnchors,
   tileAt,
   homeObject,
+  homeAnchor,
   hasOwnHomeOnCurrentMap,
   watchdogObject,
   homeTile,
@@ -451,6 +455,8 @@ const {
   mapReady,
   loadInitialMap,
   refreshMapItems,
+  applyMapItemChunk,
+  setPlayerHomeAnchor,
   applyMapLandChunk,
   applyMapRealtimeEvent,
   applyHomeObjectOwnerData,
@@ -471,7 +477,7 @@ const renderLoop = useMapRenderLoop({
   getFrameInterval: () => camera.scale < 0.52 ? 1000 / 18 : 1000 / 30,
   drawFrame: drawMapFrame,
   onResize: handleCanvasResize,
-  onDrawRequest: () => queueVisibleLandChunkLoad(),
+  onDrawRequest: queueVisibleChunkLoads,
 })
 const mainCanvasBounds = renderLoop.bounds
 const visibleLandChunks = useVisibleLandChunks({
@@ -483,7 +489,7 @@ const visibleLandChunks = useVisibleLandChunks({
   isMapReady: () => mapReady.value,
   getMapWidth: () => mapWidth.value,
   getMapHeight: () => mapHeight.value,
-  getHomeObject: () => homeObject.value,
+  getHomeObject: () => homeAnchor.value,
   getLandPlacementMode: () => landPlacementMode.value,
 })
 const {
@@ -491,11 +497,21 @@ const {
   queueVisibleLandChunkLoad,
   loadLandChunk,
   resetLandChunkLoader,
-} = useLandChunkLoader({
+} = useLandChunkLoader<MapLandChunkItem>({
   canLoad: visibleLandChunks.canLoad,
   getRequests: visibleLandChunks.getRequests,
   fetchChunk: (chunk) => loadMapLandChunk(mapInfo.id || MAP_FILE_ID_NAMELESS, chunk),
   applyChunk: applyMapLandChunk,
+  onLoadingChange: requestAnimationDraw,
+})
+const {
+  queueVisibleLandChunkLoad: queueVisibleMapItemChunkLoad,
+  resetLandChunkLoader: resetMapItemChunkLoader,
+} = useLandChunkLoader<MapItemResponse>({
+  canLoad: visibleLandChunks.canLoad,
+  getRequests: visibleLandChunks.getRequests,
+  fetchChunk: (chunk) => loadMapItems(mapInfo.id || MAP_FILE_ID_NAMELESS, chunk),
+  applyChunk: applyMapItemChunk,
   onLoadingChange: requestAnimationDraw,
 })
 const {
@@ -863,6 +879,7 @@ onBeforeUnmount(() => {
   mapInitializeVersion += 1
   resetQueuedMapLandChunks()
   resetLandChunkLoader()
+  resetMapItemChunkLoader()
   toastStack.clearToasts()
   window.removeEventListener('resize', handleResize)
   window.removeEventListener('keydown', handleKeydown)
@@ -889,17 +906,48 @@ async function initializeMap() {
     itemCatalog.value = itemList.items
     updateClaimItemInfo(itemList.items)
     replacePlantCatalog(plantCatalog.plantCycle, plantCatalog.plantDefinitions)
+    await loadPlayerHomeAnchor(MAP_FILE_ID_NAMELESS)
+    if (version !== mapInitializeVersion) return
+
     renderedMap.rebuild()
     await refreshClaimInventory()
     if (version !== mapInitializeVersion) return
 
     focusInitialMapPosition()
-    queueVisibleLandChunkLoad()
+    queueVisibleChunkLoads()
   } catch (error) {
     if (version !== mapInitializeVersion) return
 
     console.error(error)
     requestDraw()
+  }
+}
+
+async function loadPlayerHomeAnchor(mapId: number) {
+  const playerId = sign.player_id
+  if (!playerId) {
+    setPlayerHomeAnchor(null)
+    return
+  }
+
+  try {
+    const homes = await loadMapPlayerHome(playerId, mapId)
+    setPlayerHomeAnchor(getPrimaryHomeAnchor(homes))
+  } catch (error) {
+    console.error(error)
+    setPlayerHomeAnchor(null)
+  }
+}
+
+function getPrimaryHomeAnchor(homes: MapPlayerHomeItem[]) {
+  const home = homes[0]
+  if (!home) return null
+
+  return {
+    x: home.x,
+    y: home.y,
+    width: Math.max(1, home.width),
+    height: Math.max(1, home.height),
   }
 }
 
@@ -909,6 +957,11 @@ function focusInitialMapPosition() {
 
   if (homeObject.value) {
     focusInitialHomeObject(homeObject.value)
+    return
+  }
+
+  if (homeAnchor.value) {
+    focusInitialHomeAnchor(homeAnchor.value)
     return
   }
 
@@ -938,9 +991,48 @@ function centerInitialMapFallback() {
   requestDraw()
 }
 
+function focusInitialHomeAnchor(anchor: { x: number; y: number; width: number; height: number }) {
+  const tile = tileAt(anchor.x, anchor.y)
+  if (tile) selectedTile.value = tile
+  selectedMapObject.value = createHomeAnchorSelection(anchor)
+
+  if (mainCanvasBounds.width > 0 && mainCanvasBounds.height > 0) {
+    camera.x = mainCanvasBounds.width / 2 - (anchor.x + anchor.width / 2) * tileSize * camera.scale
+    camera.y = mainCanvasBounds.height / 2 - (anchor.y + anchor.height / 2) * tileSize * camera.scale
+    camera.ready = true
+    mapNavigation.clampCamera(mainCanvasBounds.width, mainCanvasBounds.height)
+  }
+  requestDraw()
+}
+
+function createHomeAnchorSelection(anchor: { x: number; y: number; width: number; height: number }): MapObject {
+  return {
+    id: `player-home-anchor-${anchor.x}-${anchor.y}`,
+    type: 'home',
+    x: anchor.x,
+    y: anchor.y,
+    width: anchor.width,
+    height: anchor.height,
+    level: 1,
+    ownerType: 'player',
+    ownerData: {
+      player_id: sign.player_id ?? '',
+      name: playerInfo.value?.name ?? '',
+      avatar: playerInfo.value?.avatar ?? null,
+      gender: playerInfo.value?.gender,
+      gender_string: playerInfo.value?.gender_string,
+      tick_age: playerInfo.value?.tick_age,
+      tick_age_string: playerInfo.value?.tick_age_string,
+    },
+    createdAtString: null,
+  }
+}
+
 function resetLandChunkState() {
   resetQueuedMapLandChunks()
   resetLandChunkLoader()
+  resetMapItemChunkLoader()
+  setPlayerHomeAnchor(null)
   resetCropActions()
 }
 
@@ -1022,7 +1114,7 @@ async function locateChronicleTile(location: PlayerChronicleLocation) {
   hideHomeHoverCard()
   hideLandHoverCard()
   mapNavigation.focusTile(tile)
-  queueVisibleLandChunkLoad()
+  queueVisibleChunkLoads()
 }
 
 function locatePlayerHomeById(playerId: string) {
@@ -1047,7 +1139,7 @@ function locatePlayerHomeById(playerId: string) {
   hideHomeHoverCard()
   hideLandHoverCard()
   mapNavigation.focusMapObject(home)
-  queueVisibleLandChunkLoad()
+  queueVisibleChunkLoads()
 }
 
 function isFarmToolValid(tile: Tile) {
@@ -1080,6 +1172,11 @@ function requestDraw() {
 
 function requestAnimationDraw() {
   renderLoop.requestAnimationDraw()
+}
+
+function queueVisibleChunkLoads() {
+  queueVisibleLandChunkLoad()
+  queueVisibleMapItemChunkLoad()
 }
 
 function drawMapFrame(context: CanvasRenderingContext2D, timestamp: number, bounds: { width: number; height: number }) {

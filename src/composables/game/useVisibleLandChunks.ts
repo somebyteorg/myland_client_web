@@ -1,4 +1,5 @@
 import {
+    type ChunkAnchorRect,
     canLoadLandChunks,
     getAlignedLandChunkRequests,
     getLandChunkTargetSize,
@@ -7,7 +8,6 @@ import {
 import {tileSize} from '@/game/config'
 import type {LandPlacementMode} from '@/composables/game/useLandClaims'
 import type {CameraState, ViewportRect} from '@/game/mapCamera'
-import type {MapObject} from '@/game/types'
 
 interface UseVisibleLandChunksOptions {
     camera: CameraState
@@ -18,7 +18,7 @@ interface UseVisibleLandChunksOptions {
     isMapReady: () => boolean
     getMapWidth: () => number
     getMapHeight: () => number
-    getHomeObject: () => MapObject | null
+    getHomeObject: () => ChunkAnchorRect | null
     getLandPlacementMode: () => LandPlacementMode | null
 }
 

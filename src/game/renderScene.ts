@@ -12,10 +12,12 @@ import type {ClaimPreviewState} from './renderOverlays'
 
 type TileLookup = (x: number, y: number) => Tile | null
 type PlacementMode = 'pioneer' | 'deed' | null
+const overviewStaticScale = 0.42
 const highDetailStaticScale = 1.45
+const maxStaticMapCanvasPixels = 96 * 1024 * 1024
 
 export interface StaticMapResult {
-    canvas: HTMLCanvasElement
+    canvas: HTMLCanvasElement | null
     ownerLabelClusters: OwnerLabelCluster[]
 }
 
@@ -57,6 +59,15 @@ export function buildStaticMapCanvas(
     worldWidth: number,
     worldHeight: number,
 ): StaticMapResult | null {
+    const ownerLabelClusters = buildOwnerLabelClusters(tiles, tileAt, mapWidth, mapHeight)
+
+    if (worldWidth * worldHeight > maxStaticMapCanvasPixels) {
+        return {
+            canvas: null,
+            ownerLabelClusters,
+        }
+    }
+
     const canvas = document.createElement('canvas')
     canvas.width = worldWidth
     canvas.height = worldHeight
@@ -74,7 +85,7 @@ export function buildStaticMapCanvas(
 
     return {
         canvas,
-        ownerLabelClusters: buildOwnerLabelClusters(tiles, tileAt, mapWidth, mapHeight),
+        ownerLabelClusters,
     }
 }
 
@@ -91,12 +102,21 @@ function drawBackdrop(context: CanvasRenderingContext2D, width: number, height: 
 
 function drawStaticViewport(context: CanvasRenderingContext2D, options: DrawSceneOptions) {
     if (options.camera.scale >= highDetailStaticScale) {
-        drawHighDetailStaticViewport(context, options)
+        drawVisibleStaticViewport(context, options)
         return
     }
 
-    const sourceCanvas = options.camera.scale < 0.42 ? options.overviewCanvas : options.staticCanvas
-    if (!sourceCanvas || options.worldWidth <= 0 || options.worldHeight <= 0) return
+    const sourceCanvas = options.camera.scale < overviewStaticScale ? options.overviewCanvas : options.staticCanvas
+    if (!sourceCanvas) {
+        drawVisibleStaticViewport(context, options)
+        return
+    }
+
+    drawCachedStaticViewport(context, sourceCanvas, options)
+}
+
+function drawCachedStaticViewport(context: CanvasRenderingContext2D, sourceCanvas: HTMLCanvasElement, options: DrawSceneOptions) {
+    if (options.worldWidth <= 0 || options.worldHeight <= 0) return
 
     const sx = Math.max(0, -options.camera.x / options.camera.scale)
     const sy = Math.max(0, -options.camera.y / options.camera.scale)
@@ -122,7 +142,7 @@ function drawStaticViewport(context: CanvasRenderingContext2D, options: DrawScen
     )
 }
 
-function drawHighDetailStaticViewport(context: CanvasRenderingContext2D, options: DrawSceneOptions) {
+function drawVisibleStaticViewport(context: CanvasRenderingContext2D, options: DrawSceneOptions) {
     const bounds = getVisibleTileBounds(
         options.camera,
         options.bounds.width,

@@ -1,16 +1,15 @@
 import {getLandChunkKey} from '@/game/landChunks'
 import type {LandChunkRequest} from '@/game/landChunks'
-import type {MapLandChunkItem} from '@/game/types'
 
-interface UseLandChunkLoaderOptions {
+interface UseLandChunkLoaderOptions<T> {
     canLoad: () => boolean
     getRequests: () => LandChunkRequest[]
-    fetchChunk: (chunk: LandChunkRequest) => Promise<MapLandChunkItem[]>
-    applyChunk: (items: MapLandChunkItem[]) => void
+    fetchChunk: (chunk: LandChunkRequest) => Promise<T[]>
+    applyChunk: (items: T[], chunk: LandChunkRequest) => void
     onLoadingChange: () => void
 }
 
-export function useLandChunkLoader(options: UseLandChunkLoaderOptions) {
+export function useLandChunkLoader<T>(options: UseLandChunkLoaderOptions<T>) {
     const loadedLandChunks = new Set<string>()
     const loadingLandChunks = new Set<string>()
     let loadTimer: ReturnType<typeof window.setTimeout> | null = null
@@ -50,7 +49,7 @@ export function useLandChunkLoader(options: UseLandChunkLoaderOptions) {
             const items = await options.fetchChunk(chunk)
             if (version !== requestVersion) return
 
-            options.applyChunk(items)
+            options.applyChunk(items, chunk)
             loadedLandChunks.add(key)
         } catch (error) {
             console.error(error)

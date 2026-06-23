@@ -9,9 +9,12 @@ export interface BuildMinimapStaticMapOptions {
     canPlaceLandAt: (tile: Tile) => boolean
 }
 
+const maxOverviewCanvasSize = 2048
+
 export function buildOverviewMapCanvas(tiles: Tile[], mapWidth: number, mapHeight: number) {
-    const width = mapWidth * overviewCellSize
-    const height = mapHeight * overviewCellSize
+    const cellSize = getOverviewCellSize(mapWidth, mapHeight)
+    const width = mapWidth * cellSize
+    const height = mapHeight * cellSize
     const canvas = document.createElement('canvas')
     canvas.width = width
     canvas.height = height
@@ -27,13 +30,17 @@ export function buildOverviewMapCanvas(tiles: Tile[], mapWidth: number, mapHeigh
     context.fillRect(0, 0, width, height)
 
     for (const tile of tiles) {
-        const left = tile.x * overviewCellSize
-        const top = tile.y * overviewCellSize
+        const left = tile.x * cellSize
+        const top = tile.y * cellSize
         context.fillStyle = getOverviewColor(tile)
-        context.fillRect(left, top, overviewCellSize, overviewCellSize)
+        context.fillRect(left, top, cellSize, cellSize)
     }
 
     return canvas
+}
+
+function getOverviewCellSize(mapWidth: number, mapHeight: number) {
+    return Math.max(1, Math.min(overviewCellSize, Math.floor(maxOverviewCanvasSize / Math.max(mapWidth, mapHeight, 1))))
 }
 
 export function buildMinimapStaticMapCanvas(tiles: Tile[], mapWidth: number, mapHeight: number, options: BuildMinimapStaticMapOptions) {

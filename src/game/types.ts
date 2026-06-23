@@ -83,6 +83,15 @@ export interface MapLandChunkItem {
     crop: MapLandCrop | null
 }
 
+export interface MapPlayerHomeItem {
+    item_name: string | null
+    x: number
+    y: number
+    width: number
+    height: number
+    level: number
+}
+
 export interface LandCropPlantingResponse {
     crop_id: number
     crop_status?: CropStatus
