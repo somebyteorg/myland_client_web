@@ -219,7 +219,7 @@ function drawPlants(
             const tile = options.tileAt(x, y)
             if (!tile?.plant) continue
 
-            drawPlant(context, tile, timestamp, options.plantDefinitions)
+            drawPlant(context, tile, timestamp, options.plantDefinitions, options.camera.scale)
         }
     }
 }
