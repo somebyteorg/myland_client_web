@@ -115,17 +115,33 @@ export function createMapEventApplier(options: MapEventApplierOptions) {
     }
 
     function applyHomeLinkedLandColors(objects: MapObject[]) {
+        let changed = false
+
         for (const object of objects) {
             if (!isHomeObject(object)) continue
 
             const themeColor = options.getObjectThemeColor(object)
-            const owner = getHomeObjectOwnerLabel(object)
+            const owner = getLandOwnerLabelForHomeObject(object)
             const linkedTiles = getLinkedLandTiles(object, owner)
 
             for (const tile of linkedTiles) {
-                tile.themeColor = themeColor
+                if (tile.owner !== owner) {
+                    tile.owner = owner
+                    changed = true
+                }
+                if (tile.themeColor !== themeColor) {
+                    tile.themeColor = themeColor
+                    changed = true
+                }
+                const name = getLinkedLandTileName(tile, owner)
+                if (tile.name !== name) {
+                    tile.name = name
+                    changed = true
+                }
             }
         }
+
+        return changed
     }
 
     function getLinkedLandTiles(object: MapObject, owner: string) {
@@ -134,9 +150,28 @@ export function createMapEventApplier(options: MapEventApplierOptions) {
 
     function canHomeColorLinkTile(tile: Tile, object: MapObject, owner: string) {
         if (tile.terrain === 'home' || tile.terrain === 'water' || tile.terrain === 'mountain') return false
-        if (tile.ownerType !== object.ownerType || tile.owner !== owner) return false
+        if (tile.ownerType !== object.ownerType) return false
+        if (tile.ownerPlayerId && object.ownerData?.player_id) return tile.ownerPlayerId === object.ownerData.player_id
+        if (tile.owner !== owner) return false
 
         return tile.terrain === 'field' || tile.terrain === 'grass'
+    }
+
+    function getLandOwnerLabelForHomeObject(object: MapObject) {
+        const ownerName = object.ownerData?.name?.trim()
+        if (ownerName) return ownerName
+
+        return object.ownerType === 'player' ? '我' : '邻居'
+    }
+
+    function getLinkedLandTileName(tile: Tile, owner: string) {
+        const explicitName = tile.landName?.trim()
+        if (explicitName) return explicitName
+        if (tile.ownerType === 'player') return `我的地 ${tile.id}`
+        if (tile.ownerType === 'neighbor') return `${owner}的田地 ${tile.id}`
+        if (tile.ownerType === 'village') return `村落土地 ${tile.id}`
+
+        return `土地 ${tile.id}`
     }
 
     function rememberOccupiedObject(object: MapObject) {

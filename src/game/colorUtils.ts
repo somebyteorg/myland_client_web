@@ -29,6 +29,18 @@ export function hexToRgba(color: string, alpha: number) {
     return `rgba(${red}, ${green}, ${blue}, ${safeAlpha})`
 }
 
+export function parseHexColor(color: string, fallback = DEFAULT_HOME_COLOR) {
+    const normalized = normalizeHexColor(color) ?? resolveThemeColor(fallback)
+    const hex = normalized.slice(1)
+    const value = Number.parseInt(hex, 16)
+
+    return {
+        red: (value >> 16) & 255,
+        green: (value >> 8) & 255,
+        blue: value & 255,
+    }
+}
+
 export function getThemeStrokeColor(color: string | null | undefined) {
     const normalized = resolveThemeColor(color)
     const target = getRelativeLuminance(normalized) > 0.72 ? '#3a3123' : '#fff7df'
@@ -66,15 +78,7 @@ function getRelativeLuminance(color: string) {
 }
 
 function hexToRgb(color: string) {
-    const normalized = resolveThemeColor(color)
-    const hex = normalized.slice(1)
-    const value = Number.parseInt(hex, 16)
-
-    return {
-        red: (value >> 16) & 255,
-        green: (value >> 8) & 255,
-        blue: value & 255,
-    }
+    return parseHexColor(resolveThemeColor(color))
 }
 
 function rgbToHex(red: number, green: number, blue: number) {

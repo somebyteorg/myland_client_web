@@ -1,7 +1,8 @@
 import {tileSize} from './config'
 import type {CropStatus, PlantDefinition, PlantDefinitionMap, PlantType, Tile} from './types'
+import type {PixiDrawContext} from './pixiDrawContext'
 
-export function drawPlant(context: CanvasRenderingContext2D, tile: Tile, timestamp: number, plantDefinitions: PlantDefinitionMap) {
+export function drawPlant(context: PixiDrawContext, tile: Tile, timestamp: number, plantDefinitions: PlantDefinitionMap) {
     if (!tile.plant || !tile.cropStatus) return
 
     const definition = plantDefinitions[tile.plant]
@@ -17,9 +18,6 @@ export function drawPlant(context: CanvasRenderingContext2D, tile: Tile, timesta
     const pulse = 1 + Math.sin(time * 3 + tile.x) * 0.06
 
     context.save()
-    context.beginPath()
-    context.rect(left + 2, top + 2, tileSize - 4, tileSize - 4)
-    context.clip()
     context.lineCap = 'round'
     context.lineJoin = 'round'
 
@@ -46,7 +44,7 @@ function getStageScale(stage: CropStatus) {
     return 0.78
 }
 
-function drawPlantSeed(context: CanvasRenderingContext2D, definition: PlantDefinition, centerX: number, baseY: number, pulse: number) {
+function drawPlantSeed(context: PixiDrawContext, definition: PlantDefinition, centerX: number, baseY: number, pulse: number) {
     for (let i = -1; i <= 1; i += 1) {
         context.fillStyle = definition.seedColor
         context.strokeStyle = 'rgba(71, 48, 24, 0.34)'
@@ -58,7 +56,7 @@ function drawPlantSeed(context: CanvasRenderingContext2D, definition: PlantDefin
     }
 }
 
-function drawPlantGrowing(context: CanvasRenderingContext2D, definition: PlantDefinition, centerX: number, baseY: number, sway: number) {
+function drawPlantGrowing(context: PixiDrawContext, definition: PlantDefinition, centerX: number, baseY: number, sway: number) {
     for (let i = -1; i <= 1; i += 1) {
         const x = centerX + i * 11
         context.beginPath()
@@ -69,7 +67,7 @@ function drawPlantGrowing(context: CanvasRenderingContext2D, definition: PlantDe
     }
 }
 
-function drawPlantMature(context: CanvasRenderingContext2D, definition: PlantDefinition, centerX: number, baseY: number, sway: number, plant: PlantType) {
+function drawPlantMature(context: PixiDrawContext, definition: PlantDefinition, centerX: number, baseY: number, sway: number, plant: PlantType) {
     if (definition.kind === 'tree') {
         context.beginPath()
         context.moveTo(centerX, baseY)
@@ -102,7 +100,7 @@ function drawPlantMature(context: CanvasRenderingContext2D, definition: PlantDef
     drawFruitCluster(context, definition, centerX + sway, baseY - 32, plant)
 }
 
-function drawPlantWithered(context: CanvasRenderingContext2D, centerX: number, baseY: number, sway: number) {
+function drawPlantWithered(context: PixiDrawContext, centerX: number, baseY: number, sway: number) {
     for (let i = -1; i <= 1; i += 1) {
         const x = centerX + i * 11
         context.beginPath()
@@ -119,7 +117,7 @@ function drawPlantWithered(context: CanvasRenderingContext2D, centerX: number, b
     }
 }
 
-function drawLeafPair(context: CanvasRenderingContext2D, color: string, x: number, y: number, size: number) {
+function drawLeafPair(context: PixiDrawContext, color: string, x: number, y: number, size: number) {
     context.fillStyle = color
     context.strokeStyle = 'rgba(42, 83, 35, 0.32)'
     context.lineWidth = 1.15
@@ -130,7 +128,7 @@ function drawLeafPair(context: CanvasRenderingContext2D, color: string, x: numbe
     context.stroke()
 }
 
-function drawFruitCluster(context: CanvasRenderingContext2D, definition: PlantDefinition, x: number, y: number, plant: PlantType) {
+function drawFruitCluster(context: PixiDrawContext, definition: PlantDefinition, x: number, y: number, plant: PlantType) {
     const seed = hashNumber(plant)
     const count = definition.kind === 'vine' ? 7 : definition.kind === 'bush' ? 5 : Math.round(3 + seed * 2)
     const clusterRadius = definition.kind === 'vine' ? 6 : definition.kind === 'bush' ? 8 : 9
@@ -155,14 +153,14 @@ function drawFruitCluster(context: CanvasRenderingContext2D, definition: PlantDe
     context.fill()
 }
 
-function drawPlantGroundShadow(context: CanvasRenderingContext2D, centerX: number, baseY: number) {
+function drawPlantGroundShadow(context: PixiDrawContext, centerX: number, baseY: number) {
     context.fillStyle = 'rgba(72, 55, 22, 0.16)'
     context.beginPath()
     context.ellipse(centerX, baseY + 2, 17, 4.4, 0, 0, Math.PI * 2)
     context.fill()
 }
 
-function strokeOutlined(context: CanvasRenderingContext2D, color: string, lineWidth: number, outline: string) {
+function strokeOutlined(context: PixiDrawContext, color: string, lineWidth: number, outline: string) {
     context.strokeStyle = outline
     context.lineWidth = lineWidth + 1.8
     context.stroke()

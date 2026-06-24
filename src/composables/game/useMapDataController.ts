@@ -1,4 +1,4 @@
-import {computed, reactive, type Ref} from 'vue'
+import {computed, reactive, ref, shallowReactive, type Ref} from 'vue'
 import {removeButterfliesFromTileIfNeeded} from '@/game/butterflies'
 import {resolveThemeColor} from '@/game/colorUtils'
 import {applyLandChunkTilePatches} from '@/game/landTilePatch'
@@ -28,6 +28,8 @@ import type {
     Tile,
 } from '@/game/types'
 
+const reactiveArrayBatchSize = 2048
+
 interface UseMapDataControllerOptions {
     selectedTile: Ref<Tile | null>
     selectedMapObject: Ref<MapObject | null>
@@ -46,10 +48,11 @@ export function useMapDataController(options: UseMapDataControllerOptions) {
         width: 0,
         height: 0,
     })
-    const tiles = reactive<Tile[]>([])
-    const mapObjects = reactive<MapObject[]>([])
-    const occupiedMapRects = reactive<Array<{ x: number; y: number; width: number; height: number }>>([])
-    const butterflyAnchors = reactive<Butterfly[]>([])
+    const tiles = shallowReactive<Tile[]>([])
+    const mapObjects = shallowReactive<MapObject[]>([])
+    const occupiedMapRects = shallowReactive<Array<{ x: number; y: number; width: number; height: number }>>([])
+    const butterflyAnchors = shallowReactive<Butterfly[]>([])
+    const mapDataVersion = ref(0)
     const playerHomeAnchor = reactive<ChunkAnchorRect>({
         x: 0,
         y: 0,
@@ -59,7 +62,11 @@ export function useMapDataController(options: UseMapDataControllerOptions) {
     let tileAtLookup = createTileLookup(tiles, 0, 0)
 
     const tileAt = (x: number, y: number) => tileAtLookup(x, y)
-    const homeObject = computed(() => mapObjects.find((object) => object.type === 'home' && object.ownerType === 'player') ?? null)
+    const homeObject = computed(() => {
+        mapDataVersion.value
+
+        return mapObjects.find((object) => object.type === 'home' && object.ownerType === 'player') ?? null
+    })
     const homeAnchor = computed<ChunkAnchorRect | null>(() => {
         if (homeObject.value) return homeObject.value
         if (playerHomeAnchor.width > 0 && playerHomeAnchor.height > 0) return playerHomeAnchor
@@ -67,8 +74,14 @@ export function useMapDataController(options: UseMapDataControllerOptions) {
         return null
     })
     const hasOwnHomeOnCurrentMap = computed(() => Boolean(homeAnchor.value))
-    const watchdogObject = computed(() => mapObjects.find((object) => object.type === 'watchdog' && object.ownerType === 'player') ?? null)
+    const watchdogObject = computed(() => {
+        mapDataVersion.value
+
+        return mapObjects.find((object) => object.type === 'watchdog' && object.ownerType === 'player') ?? null
+    })
     const homeTile = computed(() => {
+        mapDataVersion.value
+
         if (homeObject.value) return tileAt(homeObject.value.x, homeObject.value.y)
         if (homeAnchor.value) return tileAt(homeAnchor.value.x, homeAnchor.value.y)
 
@@ -77,7 +90,11 @@ export function useMapDataController(options: UseMapDataControllerOptions) {
     const mapName = computed(() => mapInfo.name || mapInfo.code || '地图')
     const mapWidth = computed(() => mapInfo.width)
     const mapHeight = computed(() => mapInfo.height)
-    const mapReady = computed(() => tiles.length > 0 && mapInfo.width > 0 && mapInfo.height > 0)
+    const mapReady = computed(() => {
+        mapDataVersion.value
+
+        return tiles.length > 0 && mapInfo.width > 0 && mapInfo.height > 0
+    })
 
     const mapEventApplier = createMapEventApplier({
         tileAt: () => tileAt,
@@ -94,7 +111,8 @@ export function useMapDataController(options: UseMapDataControllerOptions) {
     async function loadInitialMap(mapId: number) {
         const initialData = await loadInitialMapData(mapId)
         applyInitialMapJson(initialData.mapJson)
-        butterflyAnchors.splice(0, butterflyAnchors.length, ...createButterflies(tiles))
+        replaceReactiveArray(butterflyAnchors, createButterflies(tiles))
+        bumpMapDataVersion()
 
         return {
             itemList: initialData.itemList,
@@ -109,9 +127,10 @@ export function useMapDataController(options: UseMapDataControllerOptions) {
         mapInfo.width = mapJson.width
         mapInfo.height = mapJson.height
 
-        tiles.splice(0, tiles.length, ...mapJson.tiles)
-        mapObjects.splice(0, mapObjects.length, ...mapJson.objects)
+        replaceReactiveArray(tiles, mapJson.tiles)
+        replaceReactiveArray(mapObjects, mapJson.objects)
         tileAtLookup = createTileLookup(tiles, mapJson.width, mapJson.height)
+        bumpMapDataVersion()
     }
 
     function applyMapLandChunk(items: MapLandChunkItem[]) {
@@ -130,6 +149,7 @@ export function useMapDataController(options: UseMapDataControllerOptions) {
                 }
             },
         })
+        bumpMapDataVersion()
 
         if (result.needsRenderedMapRebuild) {
             options.rebuildRenderedMaps()
@@ -140,16 +160,16 @@ export function useMapDataController(options: UseMapDataControllerOptions) {
 
     async function refreshMapItems(mapId: number, rect?: LandChunkRequest) {
         const items = await loadMapItems(mapId, rect)
-        if (rect) applyMapItemsInRect(items, rect)
-        else applyMapItems(items)
-        options.requestDraw()
+        const needsRenderedMapRebuild = rect ? applyMapItemsInRect(items, rect) : applyMapItems(items)
+        if (needsRenderedMapRebuild) options.rebuildRenderedMaps()
+        else options.requestDraw()
 
         return items
     }
 
     function applyMapItemChunk(items: MapItemResponse[], rect: LandChunkRequest) {
-        applyMapItemsInRect(items, rect)
-        if (items.some((item) => item.item_type === 'home')) {
+        const needsRenderedMapRebuild = applyMapItemsInRect(items, rect)
+        if (needsRenderedMapRebuild || items.some((item) => item.item_type === 'home')) {
             options.rebuildRenderedMaps()
         } else {
             options.requestDraw()
@@ -178,8 +198,11 @@ export function useMapDataController(options: UseMapDataControllerOptions) {
             if (object.type === 'home') mapEventApplier.markHomeObjectTiles(object)
         }
 
-        mapObjects.splice(0, mapObjects.length, ...objects)
-        mapEventApplier.applyHomeLinkedLandColors(objects)
+        replaceReactiveArray(mapObjects, objects)
+        const needsRenderedMapRebuild = mapEventApplier.applyHomeLinkedLandColors(objects)
+        bumpMapDataVersion()
+
+        return needsRenderedMapRebuild
     }
 
     function applyMapItemsInRect(items: MapItemResponse[], rect: LandChunkRequest) {
@@ -191,14 +214,15 @@ export function useMapDataController(options: UseMapDataControllerOptions) {
             return !isMapObjectAnchorInRect(object, rect)
         })
 
-        nextObjects.push(...objects)
-        mapObjects.splice(0, mapObjects.length, ...nextObjects)
+        pushReactiveArray(nextObjects, objects)
+        replaceReactiveArray(mapObjects, nextObjects)
         rebuildOccupiedMapRects()
+        bumpMapDataVersion()
 
         for (const object of objects) {
             if (object.type === 'home') mapEventApplier.markHomeObjectTiles(object)
         }
-        mapEventApplier.applyHomeLinkedLandColors(objects)
+        const needsRenderedMapRebuild = mapEventApplier.applyHomeLinkedLandColors(objects)
 
         if (options.selectedMapObject.value) {
             const selectedKey = getMapObjectMergeKey(options.selectedMapObject.value)
@@ -208,6 +232,8 @@ export function useMapDataController(options: UseMapDataControllerOptions) {
         } else {
             selectLoadedPlayerHomeObjectIfNeeded()
         }
+
+        return needsRenderedMapRebuild
     }
 
     function selectLoadedPlayerHomeObjectIfNeeded() {
@@ -226,6 +252,7 @@ export function useMapDataController(options: UseMapDataControllerOptions) {
 
     function applyMapRealtimeEvent(event: MapRealtimeEvent) {
         mapEventApplier.applyEvent(event)
+        bumpMapDataVersion()
 
         if (mapRealtimeEventNeedsRenderedMapRebuild(event)) {
             options.rebuildRenderedMaps()
@@ -237,6 +264,7 @@ export function useMapDataController(options: UseMapDataControllerOptions) {
     function applyHomeObjectOwnerData(object: MapObject) {
         mapEventApplier.markHomeObjectTiles(object)
         mapEventApplier.applyHomeLinkedLandColors([object])
+        bumpMapDataVersion()
         options.rebuildRenderedMaps()
     }
 
@@ -250,6 +278,10 @@ export function useMapDataController(options: UseMapDataControllerOptions) {
         for (const object of mapObjects) {
             if (object.width > 0 && object.height > 0) mapEventApplier.rememberOccupiedObject(object)
         }
+    }
+
+    function bumpMapDataVersion() {
+        mapDataVersion.value += 1
     }
 
     function getMapObjectMergeKey(object: MapObject) {
@@ -286,5 +318,16 @@ export function useMapDataController(options: UseMapDataControllerOptions) {
         applyMapLandChunk,
         applyMapRealtimeEvent,
         applyHomeObjectOwnerData,
+    }
+}
+
+function replaceReactiveArray<T>(target: T[], items: T[]) {
+    target.splice(0, target.length)
+    pushReactiveArray(target, items)
+}
+
+function pushReactiveArray<T>(target: T[], items: T[]) {
+    for (let index = 0; index < items.length; index += reactiveArrayBatchSize) {
+        target.push(...items.slice(index, index + reactiveArrayBatchSize))
     }
 }

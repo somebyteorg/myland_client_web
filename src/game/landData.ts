@@ -7,7 +7,7 @@ import type {
     MapLandChunkItem,
 } from './types'
 
-export function loadMapLandChunk(mapId: number, chunk: { x: number; y: number; w: number; h: number }) {
+export function loadMapLandChunk(mapId: number, chunk: { x: number; y: number; w: number; h: number }, signal?: AbortSignal) {
     return api.get(`api/map/${encodeURIComponent(String(mapId))}/land/chunk`, {
         searchParams: {
             x: String(chunk.x),
@@ -15,6 +15,7 @@ export function loadMapLandChunk(mapId: number, chunk: { x: number; y: number; w
             w: String(chunk.w),
             h: String(chunk.h),
         },
+        signal,
     }).json<MapLandChunkItem[]>()
 }
 

@@ -30,11 +30,14 @@
         :player="playerInfo"
         :player-id="sign.player_id"
         :player-loading="playerLoading"
+        :debug-panel-visible="showRenderDebugPanel"
+        :debug-toggle-enabled="renderDebugPanelAvailable"
         :time="gameTime"
         :time-loading="timeLoading"
         @locate-chronicle-tile="locateChronicleTile"
         @locate-player-home="locatePlayerHomeById"
         @player-card-resize="updatePlayerCardHeight"
+        @toggle-debug-panel="toggleRenderDebugPanel"
         @use-deed="toggleDeedPlacementMode"
         @use-pioneer="togglePioneerPlacementMode"
     />
@@ -43,12 +46,10 @@
         :collapsed="miniMap.collapsed.value"
         :dragging="miniMap.dragging.value"
         :claim-mode="Boolean(landPlacementMode)"
-        :filters="mapFilters"
         :map-name="mapName"
         :placement-mode="landPlacementMode"
         @collapse="miniMap.collapse"
         @expand="miniMap.expand"
-        @filter="toggleMapFilter"
         @locate-player="locatePlayerLand"
         @locate-claim="locateClaimableLand"
         @mounted="miniMap.setCanvas"
@@ -124,6 +125,16 @@
         :toasts="toastStack.toasts"
         @dismiss="toastStack.removeToast"
     />
+
+    <section v-if="showRenderDebugPanel" class="render-debug-panel" aria-label="地图性能调试">
+      <strong>调试</strong>
+      <dl>
+        <template v-for="item in renderDebugStats" :key="item.label">
+          <dt>{{ item.label }}</dt>
+          <dd>{{ item.value }}</dd>
+        </template>
+      </dl>
+    </section>
   </main>
 </template>
 
@@ -153,6 +164,7 @@ import {useMiniMapController} from '@/composables/game/useMiniMapController'
 import {useNeighborHomes} from '@/composables/game/useNeighborHomes'
 import {useRenderedMapCache} from '@/composables/game/useRenderedMapCache'
 import {useMapRenderLoop} from '@/composables/game/useMapRenderLoop'
+import type {MapRenderFrameState} from '@/composables/game/useMapRenderLoop'
 import {useTileActionController} from '@/composables/game/useTileActionController'
 import {useTileRequests} from '@/composables/game/useTileRequests'
 import {useTileRuleSet} from '@/composables/game/useTileRuleSet'
@@ -182,12 +194,15 @@ import {
 } from '@/game/cropLifecycle'
 import {getTileContextActions} from '@/game/contextActions'
 import {drawMapScene} from '@/game/renderScene'
+import {PixiStaticMapCache} from '@/game/pixiMapCache'
+import {destroyPixiTextureCache, getPixiTextureCacheStats} from '@/game/pixiDrawContext'
+import {canAnimateZoomProfile, getMapZoomProfile} from '@/game/mapZoomProfile'
+import type {PixiMapRenderFrame} from '@/game/pixiRenderFrame'
 import type {PlayerChronicleLocation} from '@/game/homeTypes'
 import type {GameToastEvent} from '@/composables/useGameEventBus'
 import type {LandChunkRequest} from '@/game/landChunks'
 import type {
   ContextMenuState,
-  FilterKey,
   GameItem,
   MapItemResponse,
   MapLandChunkItem,
@@ -199,10 +214,12 @@ import type {
 const HOME_GRANT_SIZE = 2
 const LAND_CHUNK_API_MAX_SIZE = 100
 const LAND_CHUNK_TARGET_SIZE = 20
-const LAND_CHUNK_VIEW_PADDING = 3
 let mapInitializeVersion = 0
 const queuedMapLandChunks = new Map<string, MapLandChunkItem>()
 let queuedMapLandChunkFrame: number | null = null
+let mapCanvasResizeFrame: number | null = null
+let mapCanvasResizeObserver: ResizeObserver | null = null
+let requestMiniMapDraw: (() => void) | null = null
 
 interface MapItemRefreshEvent {
   map_file_id: number
@@ -237,6 +254,7 @@ const {
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 const itemCatalog = ref<GameItem[]>([])
 const playerCardHeight = ref(76)
+const renderDebugPanelOpen = ref(false)
 const gameViewStyle = computed(() => ({
   '--game-player-card-height': `${playerCardHeight.value}px`,
 }))
@@ -403,9 +421,6 @@ const {
   hideLandHoverCard,
 } = mapHoverState
 
-const mapFilters = reactive<Record<FilterKey, boolean>>({
-  claimable: false,
-})
 const {
   activeFarmTool,
   farmToolBarOpen,
@@ -471,10 +486,12 @@ const {
 })
 const worldWidth = computed(() => mapWidth.value * tileSize)
 const worldHeight = computed(() => mapHeight.value * tileSize)
+const pixiStaticMapCache = new PixiStaticMapCache()
 const renderLoop = useMapRenderLoop({
   getCanvas: () => canvasRef.value,
   maxPixelRatio,
-  getFrameInterval: () => camera.scale < 0.52 ? 1000 / 18 : 1000 / 30,
+  getAnimationFrameInterval: getMapAnimationFrameInterval,
+  getSceneFrameInterval: getMapSceneFrameInterval,
   drawFrame: drawMapFrame,
   onResize: handleCanvasResize,
   onDrawRequest: queueVisibleChunkLoads,
@@ -485,7 +502,7 @@ const visibleLandChunks = useVisibleLandChunks({
   viewport: mainCanvasBounds,
   targetSize: LAND_CHUNK_TARGET_SIZE,
   apiMaxSize: LAND_CHUNK_API_MAX_SIZE,
-  padding: LAND_CHUNK_VIEW_PADDING,
+  padding: getVisibleChunkPadding,
   isMapReady: () => mapReady.value,
   getMapWidth: () => mapWidth.value,
   getMapHeight: () => mapHeight.value,
@@ -493,6 +510,7 @@ const visibleLandChunks = useVisibleLandChunks({
   getLandPlacementMode: () => landPlacementMode.value,
 })
 const {
+  getStats: getLandChunkLoaderStats,
   loadingLandChunks,
   queueVisibleLandChunkLoad,
   loadLandChunk,
@@ -500,18 +518,22 @@ const {
 } = useLandChunkLoader<MapLandChunkItem>({
   canLoad: visibleLandChunks.canLoad,
   getRequests: visibleLandChunks.getRequests,
-  fetchChunk: (chunk) => loadMapLandChunk(mapInfo.id || MAP_FILE_ID_NAMELESS, chunk),
+  fetchChunk: (chunk, signal) => loadMapLandChunk(mapInfo.id || MAP_FILE_ID_NAMELESS, chunk, signal),
   applyChunk: applyMapLandChunk,
+  maxConcurrentLoads: 6,
   onLoadingChange: requestAnimationDraw,
 })
 const {
+  getStats: getMapItemChunkLoaderStats,
+  loadingLandChunks: loadingMapItemChunks,
   queueVisibleLandChunkLoad: queueVisibleMapItemChunkLoad,
   resetLandChunkLoader: resetMapItemChunkLoader,
 } = useLandChunkLoader<MapItemResponse>({
   canLoad: visibleLandChunks.canLoad,
   getRequests: visibleLandChunks.getRequests,
-  fetchChunk: (chunk) => loadMapItems(mapInfo.id || MAP_FILE_ID_NAMELESS, chunk),
+  fetchChunk: (chunk, signal) => loadMapItems(mapInfo.id || MAP_FILE_ID_NAMELESS, chunk, signal),
   applyChunk: applyMapItemChunk,
+  maxConcurrentLoads: 6,
   onLoadingChange: requestAnimationDraw,
 })
 const {
@@ -642,13 +664,10 @@ function setLandPlacementUi(enabled: boolean) {
   if (enabled) {
     resetActiveTool()
     closeToolBar()
-    mapFilters.claimable = true
   } else {
-    mapFilters.claimable = false
     hideClaimPreview()
     resetClaimDialog()
   }
-  renderedMap.rebuildMiniMap()
   requestDraw()
 }
 
@@ -657,14 +676,51 @@ const renderedMap = useRenderedMapCache({
   tileAt: () => tileAt,
   getMapWidth: () => mapWidth.value,
   getMapHeight: () => mapHeight.value,
-  getWorldWidth: () => worldWidth.value,
-  getWorldHeight: () => worldHeight.value,
   canBuild: () => mapReady.value,
-  getMinimapOptions: () => ({
-    claimableFilterEnabled: mapFilters.claimable,
-    canPlaceLandAt,
-  }),
 })
+const renderDebugPanelAvailable = computed(() => import.meta.env.DEV)
+const showRenderDebugPanel = computed(() => renderDebugPanelAvailable.value && renderDebugPanelOpen.value)
+const renderDebugStats = computed(() => {
+  const landChunkStats = getLandChunkLoaderStats()
+  const itemChunkStats = getMapItemChunkLoaderStats()
+  const staticStats = pixiStaticMapCache.getStats()
+  const textureStats = getPixiTextureCacheStats()
+  const renderStats = renderLoop.stats
+
+  return [
+    {label: '缩放', value: camera.scale.toFixed(2)},
+    {label: '视窗', value: `${Math.round(mainCanvasBounds.width)}x${Math.round(mainCanvasBounds.height)}`},
+    {label: '当前帧', value: `${renderStats.lastFrameMs.toFixed(1)}ms`},
+    {label: '平均帧', value: `${renderStats.averageFrameMs.toFixed(1)}ms`},
+    {label: '最慢帧', value: `${renderStats.peakFrameMs.toFixed(1)}ms`},
+    {label: '节点数', value: String(renderStats.pixiChildren)},
+    {label: '地块缓存', value: `${staticStats.cachedChunks}/${staticStats.visibleChunks}+${staticStats.pendingChunks}`},
+    {label: '构建/清理', value: `${staticStats.builtLastFrame}/${staticStats.prunedLastFrame}`},
+    {label: '清晰度', value: getStaticDetailLabel(staticStats.currentDetail)},
+    {label: '显存估算', value: `${formatTextureMemory(staticStats.texturePixels)} MB`},
+    {label: '土地加载', value: `${landChunkStats.activeLoadCount}/${landChunkStats.pendingChunks}/${landChunkStats.loadingChunks}`},
+    {label: '物件加载', value: `${itemChunkStats.activeLoadCount}/${itemChunkStats.pendingChunks}/${itemChunkStats.loadingChunks}`},
+    {label: '图片缓存', value: `${textureStats.imageTextures}/${textureStats.skippedUnsafeImages}`},
+  ]
+})
+
+function formatTextureMemory(texturePixels: number) {
+  return `${(texturePixels * 4 / 1024 / 1024).toFixed(1)}`
+}
+
+function getStaticDetailLabel(detail: string) {
+  if (detail === 'high') return '高'
+  if (detail === 'detail') return '中'
+  if (detail === 'overview') return '低'
+
+  return '无'
+}
+
+function toggleRenderDebugPanel() {
+  if (!renderDebugPanelAvailable.value) return
+
+  renderDebugPanelOpen.value = !renderDebugPanelOpen.value
+}
 const mapNavigation = useMapNavigation({
   camera,
   selectedTile,
@@ -834,6 +890,7 @@ const miniMap = useMiniMapController({
   hideContextMenu,
   requestDraw,
 })
+requestMiniMapDraw = miniMap.requestDraw
 const mapPointer = useMapPointerController({
   camera,
   getCanvas: () => canvasRef.value,
@@ -877,18 +934,24 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   mapInitializeVersion += 1
+  resetMapCanvasResizeObserver()
   resetQueuedMapLandChunks()
   resetLandChunkLoader()
   resetMapItemChunkLoader()
+  requestMiniMapDraw = null
+  miniMap.destroy()
   toastStack.clearToasts()
   window.removeEventListener('resize', handleResize)
   window.removeEventListener('keydown', handleKeydown)
+  pixiStaticMapCache.destroy()
   renderLoop.stop()
+  destroyPixiTextureCache()
 })
 
 function setMapCanvas(canvas: HTMLCanvasElement) {
   canvasRef.value = canvas
-  handleResize()
+  observeMapCanvasSize(canvas)
+  queueMapCanvasResize()
 }
 
 async function initializeMap() {
@@ -1152,7 +1215,37 @@ function rebuildRenderedMaps() {
 }
 
 function handleResize() {
+  queueMapCanvasResize()
+}
+
+function queueMapCanvasResize() {
+  if (mapCanvasResizeFrame !== null) return
+
+  mapCanvasResizeFrame = window.requestAnimationFrame(() => {
+    mapCanvasResizeFrame = null
+    resizeMapCanvasNow()
+  })
+}
+
+function resizeMapCanvasNow() {
   renderLoop.resize()
+}
+
+function observeMapCanvasSize(canvas: HTMLCanvasElement) {
+  resetMapCanvasResizeObserver()
+  if (typeof ResizeObserver === 'undefined') return
+
+  mapCanvasResizeObserver = new ResizeObserver(queueMapCanvasResize)
+  mapCanvasResizeObserver.observe(canvas)
+}
+
+function resetMapCanvasResizeObserver() {
+  if (mapCanvasResizeFrame !== null) {
+    window.cancelAnimationFrame(mapCanvasResizeFrame)
+    mapCanvasResizeFrame = null
+  }
+  mapCanvasResizeObserver?.disconnect()
+  mapCanvasResizeObserver = null
 }
 
 function handleCanvasResize() {
@@ -1163,11 +1256,18 @@ function handleCanvasResize() {
   }
 
   miniMap.updateBounds()
+  miniMap.requestDraw()
   mapNavigation.clampCamera(mainCanvasBounds.width, mainCanvasBounds.height)
 }
 
 function requestDraw() {
   renderLoop.requestDraw()
+  requestMiniMapDraw?.()
+}
+
+function requestSceneDraw() {
+  renderLoop.requestSceneDraw()
+  requestMiniMapDraw?.()
 }
 
 function requestAnimationDraw() {
@@ -1179,15 +1279,39 @@ function queueVisibleChunkLoads() {
   queueVisibleMapItemChunkLoad()
 }
 
-function drawMapFrame(context: CanvasRenderingContext2D, timestamp: number, bounds: { width: number; height: number }) {
+function getVisibleChunkPadding() {
+  return getMapZoomProfile(camera.scale).chunkPadding
+}
+
+function getMapAnimationFrameInterval() {
+  if (!mapReady.value) return Number.POSITIVE_INFINITY
+
+  const profile = getMapZoomProfile(camera.scale)
+  if (loadingLandChunks.size > 0 || loadingMapItemChunks.size > 0) return Math.min(profile.animationFrameInterval, 1000 / 18)
+  if (!canAnimateZoomProfile(profile)) return Number.POSITIVE_INFINITY
+
+  return profile.animationFrameInterval
+}
+
+function getMapSceneFrameInterval() {
+  if (!mapReady.value) return Number.POSITIVE_INFINITY
+
+  return getMapZoomProfile(camera.scale).sceneFrameInterval
+}
+
+function drawMapFrame(frame: PixiMapRenderFrame, timestamp: number, bounds: { width: number; height: number }, state: MapRenderFrameState) {
   if (!mapReady.value) {
+    if (!state.redrawSceneLayers) return
+
+    pixiStaticMapCache.destroy()
+    const context = frame.backdropContext
     context.fillStyle = landPlacementMode.value ? '#cfe7df' : '#d8eadc'
     context.fillRect(0, 0, bounds.width, bounds.height)
     return
   }
 
-  updatePlantGrowth()
-  drawMapScene(context, timestamp, {
+  if (state.redrawSceneLayers) updatePlantGrowth()
+  drawMapScene(frame, timestamp, {
     bounds,
     butterflies: butterflyAnchors,
     camera,
@@ -1198,22 +1322,24 @@ function drawMapFrame(context: CanvasRenderingContext2D, timestamp: number, boun
     landPlacementMode: landPlacementMode.value,
     landPlacementSize: landPlacementSize.value,
     loadingLandChunks,
+    loadingMapItemChunks,
     mapHeight: mapHeight.value,
     mapObjects,
     mapWidth: mapWidth.value,
-    overviewCanvas: renderedMap.cache.overviewCanvas,
     ownerLabelClusters: renderedMap.cache.ownerLabelClusters,
+    ownerLabelClusterTileKeys: renderedMap.cache.ownerLabelClusterTileKeys,
     plantDefinitions,
     selectedMapObject: selectedMapObject.value,
     selectedTile: selectedTile.value,
-    staticCanvas: renderedMap.cache.staticCanvas,
+    staticMapCache: pixiStaticMapCache,
+    staticMapVersion: renderedMap.cache.staticMapVersion,
     tileAt,
     worldHeight: worldHeight.value,
-    worldWidth: worldWidth.value,
     isTileCropActionPending,
     requestDraw,
-  })
-  miniMap.draw()
+    requestSceneDraw,
+  }, state)
+  if (state.redrawSceneLayers) miniMap.requestDraw()
 }
 
 function updatePlantGrowth() {
@@ -1229,13 +1355,6 @@ function updatePlantGrowth() {
   }
 }
 
-function toggleMapFilter(key: FilterKey) {
-  if (!(key in mapFilters)) return
-
-  mapFilters[key] = !mapFilters[key]
-  if (key === 'claimable') renderedMap.rebuildMiniMap()
-  requestDraw()
-}
 </script>
 
 <style>
@@ -1243,6 +1362,59 @@ function toggleMapFilter(key: FilterKey) {
   --game-player-card-top: 18px;
   --game-left-control-gap: 12px;
   --game-left-control-top: calc(var(--game-player-card-top) + var(--game-player-card-height, 76px) + var(--game-left-control-gap));
+}
+
+.render-debug-panel {
+  position: absolute;
+  right: 18px;
+  top: 62px;
+  z-index: 25;
+  display: grid;
+  width: 204px;
+  gap: 6px;
+  border: 1px solid rgb(95 76 42 / 34%);
+  border-radius: 8px;
+  background: rgb(36 31 23 / 84%);
+  padding: 9px 10px;
+  color: #fff6d8;
+  font-size: 11px;
+  line-height: 1;
+  pointer-events: none;
+  box-shadow: 0 14px 30px rgb(28 23 16 / 22%);
+  backdrop-filter: blur(10px);
+}
+
+.render-debug-panel strong {
+  color: #ffe27a;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.render-debug-panel dl {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  gap: 4px 8px;
+  margin: 0;
+}
+
+.render-debug-panel dt,
+.render-debug-panel dd {
+  overflow: hidden;
+  margin: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.render-debug-panel dt {
+  color: rgb(255 246 216 / 62%);
+  font-weight: 800;
+}
+
+.render-debug-panel dd {
+  color: #fff9e8;
+  font-weight: 900;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .land-placement-toggle {
@@ -1365,6 +1537,11 @@ function toggleMapFilter(key: FilterKey) {
     left: 12px;
   }
 
+  .render-debug-panel {
+    right: 12px;
+    top: 56px;
+  }
+
   .pioneer-placement-toggle {
     left: 50%;
     top: auto;
@@ -1388,6 +1565,12 @@ function toggleMapFilter(key: FilterKey) {
     gap: 7px;
     padding: 0 8px 0 10px;
     font-size: 12px;
+  }
+
+  .render-debug-panel {
+    right: 12px;
+    top: 50px;
+    width: min(204px, calc(100vw - 24px));
   }
 
   .pioneer-placement-toggle {

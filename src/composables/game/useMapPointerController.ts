@@ -22,6 +22,10 @@ export function useMapPointerController(options: UseMapPointerControllerOptions)
         lastY: 0,
         moved: 0,
     })
+    let wheelFrame: number | null = null
+    let wheelClientX = 0
+    let wheelClientY = 0
+    let wheelDelta = 0
 
     function onPointerDown(event: PointerEvent) {
         const canvas = options.getCanvas()
@@ -78,8 +82,31 @@ export function useMapPointerController(options: UseMapPointerControllerOptions)
         if (!options.isMapReady()) return
 
         options.hideContextMenu()
-        const factor = event.deltaY > 0 ? 0.9 : 1.1
-        options.handleWheelZoom(event.clientX, event.clientY, factor)
+        wheelClientX = event.clientX
+        wheelClientY = event.clientY
+        wheelDelta += normalizeWheelDelta(event)
+        if (wheelFrame !== null) return
+
+        wheelFrame = window.requestAnimationFrame(flushWheelZoom)
+    }
+
+    function flushWheelZoom() {
+        wheelFrame = null
+        if (!options.isMapReady() || wheelDelta === 0) {
+            wheelDelta = 0
+            return
+        }
+
+        const factor = Math.max(0.82, Math.min(1.22, Math.exp(-wheelDelta * 0.0018)))
+        wheelDelta = 0
+        options.handleWheelZoom(wheelClientX, wheelClientY, factor)
+    }
+
+    function normalizeWheelDelta(event: WheelEvent) {
+        if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) return event.deltaY * 16
+        if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) return event.deltaY * 240
+
+        return event.deltaY
     }
 
     return {

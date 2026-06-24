@@ -1,25 +1,23 @@
 import {drawButterflies, drawGrassWind, drawTheftClues} from './renderEffects'
-import {buildOwnerLabelClusters, drawTileLabels} from './renderLabels'
-import {drawStaticTile} from './renderMapTiles'
+import {drawTileLabels} from './renderLabels'
 import {drawHomeObject, drawScarecrowObject, drawWatchdogObject} from './renderObjects'
 import {drawPlayerStatueObject} from './renderPlayerStatue'
-import {drawLandChunkLoadingOverlays, drawOverlayHighlights} from './renderOverlays'
+import {drawLandChunkLoadingOverlays, drawOverlayHighlights, drawOwnLandBoundaryHighlights} from './renderOverlays'
 import {drawPlant} from './renderPlants'
-import type {CameraState} from './mapCamera'
+import {tileSize} from './config'
 import {getVisibleTileBounds} from './mapCamera'
+import {getCameraDrawOffset} from './renderCamera'
+import {canAnimateZoomProfile, canRenderDetailedObjects, getMapZoomProfile} from './mapZoomProfile'
+import type {CameraState} from './mapCamera'
 import type {Butterfly, PlantDefinitionMap, MapObject, OwnerLabelCluster, Tile} from './types'
 import type {ClaimPreviewState} from './renderOverlays'
+import type {PixiDrawContext} from './pixiDrawContext'
+import type {PixiStaticMapCache} from './pixiMapCache'
+import type {PixiMapRenderFrame} from './pixiRenderFrame'
+import type {MapZoomProfile} from './mapZoomProfile'
 
 type TileLookup = (x: number, y: number) => Tile | null
 type PlacementMode = 'pioneer' | 'deed' | null
-const overviewStaticScale = 0.42
-const highDetailStaticScale = 1.45
-const maxStaticMapCanvasPixels = 96 * 1024 * 1024
-
-export interface StaticMapResult {
-    canvas: HTMLCanvasElement | null
-    ownerLabelClusters: OwnerLabelCluster[]
-}
 
 export interface DrawSceneOptions {
     bounds: {
@@ -31,175 +29,147 @@ export interface DrawSceneOptions {
     landPlacementMode: PlacementMode
     landPlacementSize: number
     loadingLandChunks: ReadonlySet<string>
+    loadingMapItemChunks: ReadonlySet<string>
     mapHeight: number
     mapObjects: MapObject[]
     mapWidth: number
     ownerLabelClusters: OwnerLabelCluster[]
+    ownerLabelClusterTileKeys: ReadonlySet<string>
     plantDefinitions: PlantDefinitionMap
     selectedMapObject: MapObject | null
     selectedTile: Tile | null
-    staticCanvas: HTMLCanvasElement | null
-    overviewCanvas: HTMLCanvasElement | null
+    staticMapCache: PixiStaticMapCache
+    staticMapVersion: number
     tileAt: TileLookup
     worldHeight: number
-    worldWidth: number
     canClaimDeedTile: (tile: Tile) => boolean
     isTileCropActionPending: (tile: Tile) => boolean
     butterflies: Butterfly[]
     dog: MapObject | null
     home: MapObject | null
     requestDraw: () => void
+    requestSceneDraw: () => void
 }
 
-export function buildStaticMapCanvas(
-    tiles: Tile[],
-    tileAt: TileLookup,
-    mapWidth: number,
-    mapHeight: number,
-    worldWidth: number,
-    worldHeight: number,
-): StaticMapResult | null {
-    const ownerLabelClusters = buildOwnerLabelClusters(tiles, tileAt, mapWidth, mapHeight)
+export interface DrawSceneFrameState {
+    redrawAnimationLayers: boolean
+    redrawLabelLayer: boolean
+    redrawSceneLayers: boolean
+}
 
-    if (worldWidth * worldHeight > maxStaticMapCanvasPixels) {
-        return {
-            canvas: null,
-            ownerLabelClusters,
-        }
+export function drawMapScene(frame: PixiMapRenderFrame, timestamp: number, options: DrawSceneOptions, state: DrawSceneFrameState) {
+    const profile = getMapZoomProfile(options.camera.scale)
+
+    if (state.redrawSceneLayers) {
+        drawBackdrop(frame.backdropContext, options.bounds.width, options.bounds.height, options.landPlacementMode)
+        drawStaticViewport(frame, options)
+        drawSceneLayer(frame.sceneContext, timestamp, options, profile)
     }
-
-    const canvas = document.createElement('canvas')
-    canvas.width = worldWidth
-    canvas.height = worldHeight
-
-    const context = canvas.getContext('2d')
-    if (!context) return null
-
-    context.imageSmoothingEnabled = false
-    context.fillStyle = '#78b766'
-    context.fillRect(0, 0, worldWidth, worldHeight)
-
-    for (const tile of tiles) {
-        drawStaticTile(context, tile, tileAt, mapWidth)
+    if (state.redrawLabelLayer) {
+        drawLabelLayer(frame.labelContext, options, profile)
     }
-
-    return {
-        canvas,
-        ownerLabelClusters,
+    if (state.redrawAnimationLayers) {
+        drawCropAnimationLayer(frame.cropAnimationContext, timestamp, options, profile)
+        drawObjectAnimationLayer(frame.objectAnimationContext, timestamp, options, profile)
+        drawOverlayAnimationLayer(frame.overlayAnimationContext, timestamp, options, profile)
     }
 }
 
-export function drawMapScene(context: CanvasRenderingContext2D, timestamp: number, options: DrawSceneOptions) {
-    drawBackdrop(context, options.bounds.width, options.bounds.height, options.landPlacementMode)
-    drawStaticViewport(context, options)
-    drawDynamicLayer(context, timestamp, options)
-}
-
-function drawBackdrop(context: CanvasRenderingContext2D, width: number, height: number, landPlacementMode: PlacementMode) {
+function drawBackdrop(context: PixiDrawContext, width: number, height: number, landPlacementMode: PlacementMode) {
     context.fillStyle = landPlacementMode ? '#cfe7df' : '#d8eadc'
     context.fillRect(0, 0, width, height)
 }
 
-function drawStaticViewport(context: CanvasRenderingContext2D, options: DrawSceneOptions) {
-    if (options.camera.scale >= highDetailStaticScale) {
-        drawVisibleStaticViewport(context, options)
-        return
-    }
-
-    const sourceCanvas = options.camera.scale < overviewStaticScale ? options.overviewCanvas : options.staticCanvas
-    if (!sourceCanvas) {
-        drawVisibleStaticViewport(context, options)
-        return
-    }
-
-    drawCachedStaticViewport(context, sourceCanvas, options)
+function drawStaticViewport(frame: PixiMapRenderFrame, options: DrawSceneOptions) {
+    options.staticMapCache.sync(frame.layers.static, {
+        bounds: options.bounds,
+        camera: options.camera,
+        mapHeight: options.mapHeight,
+        mapVersion: options.staticMapVersion,
+        mapWidth: options.mapWidth,
+        requestDraw: options.requestSceneDraw,
+        renderer: frame.renderer,
+        tileAt: options.tileAt,
+    })
 }
 
-function drawCachedStaticViewport(context: CanvasRenderingContext2D, sourceCanvas: HTMLCanvasElement, options: DrawSceneOptions) {
-    if (options.worldWidth <= 0 || options.worldHeight <= 0) return
+function drawSceneLayer(context: PixiDrawContext, timestamp: number, options: DrawSceneOptions, profile: MapZoomProfile) {
+    const bounds = getSceneTileBounds(options, profile)
 
-    const sx = Math.max(0, -options.camera.x / options.camera.scale)
-    const sy = Math.max(0, -options.camera.y / options.camera.scale)
-    const sw = Math.min(options.bounds.width / options.camera.scale, options.worldWidth - sx)
-    const sh = Math.min(options.bounds.height / options.camera.scale, options.worldHeight - sy)
-
-    if (sw <= 0 || sh <= 0) return
-
-    const sourceScaleX = sourceCanvas.width / options.worldWidth
-    const sourceScaleY = sourceCanvas.height / options.worldHeight
-    const dx = options.camera.x + sx * options.camera.scale
-    const dy = options.camera.y + sy * options.camera.scale
-    context.drawImage(
-        sourceCanvas,
-        sx * sourceScaleX,
-        sy * sourceScaleY,
-        sw * sourceScaleX,
-        sh * sourceScaleY,
-        dx,
-        dy,
-        sw * options.camera.scale,
-        sh * options.camera.scale,
-    )
+    beginWorldLayer(context, options.camera)
+    if (profile.showGrid) drawTileGridOverlay(context, bounds, options.camera.scale)
+    drawOwnLandBoundaryHighlights(context, bounds, timestamp, {
+        cameraScale: options.camera.scale,
+        ownLandColor: options.home?.ownerData?.color ?? null,
+        tileAt: options.tileAt,
+    })
+    drawStableMapObjects(context, bounds, timestamp, options, profile)
+    context.restore()
 }
 
-function drawVisibleStaticViewport(context: CanvasRenderingContext2D, options: DrawSceneOptions) {
-    const bounds = getVisibleTileBounds(
-        options.camera,
-        options.bounds.width,
-        options.bounds.height,
-        options.mapWidth,
-        options.mapHeight,
-        1,
-    )
-    const offset = getCameraDrawOffset(options.camera)
+function drawLabelLayer(context: PixiDrawContext, options: DrawSceneOptions, profile: MapZoomProfile) {
+    const bounds = getSceneTileBounds(options, profile)
 
-    context.save()
-    context.translate(offset.x, offset.y)
-    context.scale(options.camera.scale, options.camera.scale)
-    for (let y = bounds.startY; y <= bounds.endY; y += 1) {
-        for (let x = bounds.startX; x <= bounds.endX; x += 1) {
-            const tile = options.tileAt(x, y)
-            if (!tile) continue
+    beginWorldLayer(context, options.camera)
+    drawTileLabels(context, bounds, {
+        cameraScale: options.camera.scale,
+        landPlacementMode: options.landPlacementMode,
+        mapObjects: options.mapObjects,
+        ownerLabelClusters: options.ownerLabelClusters,
+        ownerLabelClusterTileKeys: options.ownerLabelClusterTileKeys,
+        tileAt: options.tileAt,
+        worldHeight: options.worldHeight,
+    })
+    context.restore()
+}
 
-            drawStaticTile(context, tile, options.tileAt, options.mapWidth)
+function drawCropAnimationLayer(context: PixiDrawContext, timestamp: number, options: DrawSceneOptions, profile: MapZoomProfile) {
+    const bounds = getSceneTileBounds(options, profile)
+
+    beginWorldLayer(context, options.camera)
+    if (canAnimateZoomProfile(profile)) {
+        if (profile.showAmbientEffects) {
+            drawGrassWind(context, bounds, timestamp, {
+                cameraScale: options.camera.scale,
+                tileAt: options.tileAt,
+            })
+        }
+        drawPlants(context, bounds, timestamp, options, profile)
+    }
+    context.restore()
+}
+
+function drawObjectAnimationLayer(context: PixiDrawContext, timestamp: number, options: DrawSceneOptions, profile: MapZoomProfile) {
+    const bounds = getSceneTileBounds(options, profile)
+
+    beginWorldLayer(context, options.camera)
+    if (canAnimateZoomProfile(profile)) {
+        drawAnimatedMapObjects(context, bounds, timestamp, options.mapObjects)
+        if (profile.showAmbientEffects) {
+            drawButterflies(context, bounds, timestamp, {
+                butterflies: options.butterflies,
+                cameraScale: options.camera.scale,
+                tileAt: options.tileAt,
+            })
+            drawTheftClues(context, bounds, timestamp, {
+                cameraScale: options.camera.scale,
+                dog: options.dog,
+                home: options.home,
+                tileAt: options.tileAt,
+            })
         }
     }
     context.restore()
 }
 
-function drawDynamicLayer(context: CanvasRenderingContext2D, timestamp: number, options: DrawSceneOptions) {
-    const bounds = getVisibleTileBounds(
-        options.camera,
-        options.bounds.width,
-        options.bounds.height,
-        options.mapWidth,
-        options.mapHeight,
-    )
+function drawOverlayAnimationLayer(context: PixiDrawContext, timestamp: number, options: DrawSceneOptions, profile: MapZoomProfile) {
+    const bounds = getSceneTileBounds(options, profile)
 
-    context.save()
-    const offset = getCameraDrawOffset(options.camera)
-    context.translate(offset.x, offset.y)
-    context.scale(options.camera.scale, options.camera.scale)
-    drawGrassWind(context, bounds, timestamp, {
-        cameraScale: options.camera.scale,
-        tileAt: options.tileAt,
-    })
-    drawPlants(context, bounds, timestamp, options)
-    drawMapObjects(context, bounds, timestamp, options.mapObjects, options.requestDraw)
-    drawButterflies(context, bounds, timestamp, {
-        butterflies: options.butterflies,
-        cameraScale: options.camera.scale,
-        tileAt: options.tileAt,
-    })
-    drawTheftClues(context, bounds, timestamp, {
-        cameraScale: options.camera.scale,
-        dog: options.dog,
-        home: options.home,
-        tileAt: options.tileAt,
-    })
+    beginWorldLayer(context, options.camera)
     drawLandChunkLoadingOverlays(context, bounds, timestamp, {
         cameraScale: options.camera.scale,
         loadingLandChunks: options.loadingLandChunks,
+        loadingMapItemChunks: options.loadingMapItemChunks,
     })
     drawOverlayHighlights(context, bounds, timestamp, {
         cameraScale: options.camera.scale,
@@ -213,33 +183,36 @@ function drawDynamicLayer(context: CanvasRenderingContext2D, timestamp: number, 
         selectedTile: options.selectedTile,
         tileAt: options.tileAt,
     })
-    drawTileLabels(context, bounds, {
-        cameraScale: options.camera.scale,
-        landPlacementMode: options.landPlacementMode,
-        mapObjects: options.mapObjects,
-        ownerLabelClusters: options.ownerLabelClusters,
-        tileAt: options.tileAt,
-        worldHeight: options.worldHeight,
-    })
     context.restore()
 }
 
-function getCameraDrawOffset(camera: CameraState) {
-    if (camera.scale < highDetailStaticScale) {
-        return {
-            x: camera.x,
-            y: camera.y,
-        }
-    }
-
-    return {
-        x: Math.round(camera.x),
-        y: Math.round(camera.y),
-    }
+function getSceneTileBounds(options: DrawSceneOptions, profile: MapZoomProfile) {
+    return getVisibleTileBounds(
+        options.camera,
+        options.bounds.width,
+        options.bounds.height,
+        options.mapWidth,
+        options.mapHeight,
+        profile.renderPadding,
+    )
 }
 
-function drawPlants(context: CanvasRenderingContext2D, bounds: ReturnType<typeof getVisibleTileBounds>, timestamp: number, options: DrawSceneOptions) {
-    if (options.camera.scale < 0.38) return
+function beginWorldLayer(context: PixiDrawContext, camera: CameraState) {
+    const offset = getCameraDrawOffset(camera)
+
+    context.save()
+    context.translate(offset.x, offset.y)
+    context.scale(camera.scale, camera.scale)
+}
+
+function drawPlants(
+    context: PixiDrawContext,
+    bounds: ReturnType<typeof getVisibleTileBounds>,
+    timestamp: number,
+    options: DrawSceneOptions,
+    profile: MapZoomProfile,
+) {
+    if (!profile.showPlants) return
 
     for (let y = bounds.startY; y <= bounds.endY; y += 1) {
         for (let x = bounds.startX; x <= bounds.endX; x += 1) {
@@ -251,25 +224,42 @@ function drawPlants(context: CanvasRenderingContext2D, bounds: ReturnType<typeof
     }
 }
 
-function drawMapObjects(
-    context: CanvasRenderingContext2D,
+function drawStableMapObjects(
+    context: PixiDrawContext,
     bounds: ReturnType<typeof getVisibleTileBounds>,
     timestamp: number,
-    mapObjects: MapObject[],
-    requestDraw: () => void,
+    options: DrawSceneOptions,
+    profile: MapZoomProfile,
 ) {
-    for (const object of mapObjects) {
+    const detailedObjects = canRenderDetailedObjects(profile)
+
+    for (const object of options.mapObjects) {
         if (!objectIntersectsBounds(object, bounds)) continue
 
         if (object.type === 'home') {
-            drawHomeObject(context, object, timestamp)
+            if (!canAnimateZoomProfile(profile)) drawHomeObject(context, object, timestamp)
         } else if (object.type === 'watchdog') {
+            if (!detailedObjects) continue
             drawWatchdogObject(context, object, timestamp)
         } else if (object.type === 'player_statue') {
-            drawPlayerStatueObject(context, object, timestamp, requestDraw)
+            drawPlayerStatueObject(context, object, timestamp, options.requestSceneDraw)
         } else {
+            if (!detailedObjects) continue
             drawScarecrowObject(context, object, timestamp)
         }
+    }
+}
+
+function drawAnimatedMapObjects(
+    context: PixiDrawContext,
+    bounds: ReturnType<typeof getVisibleTileBounds>,
+    timestamp: number,
+    mapObjects: MapObject[],
+) {
+    for (const object of mapObjects) {
+        if (object.type !== 'home' || !objectIntersectsBounds(object, bounds)) continue
+
+        drawHomeObject(context, object, timestamp)
     }
 }
 
@@ -278,4 +268,31 @@ function objectIntersectsBounds(object: MapObject, bounds: ReturnType<typeof get
         object.x <= bounds.endX &&
         object.y + object.height >= bounds.startY &&
         object.y <= bounds.endY
+}
+
+function drawTileGridOverlay(context: PixiDrawContext, bounds: ReturnType<typeof getVisibleTileBounds>, cameraScale: number) {
+    if (cameraScale <= 0) return
+
+    const left = bounds.startX * tileSize
+    const top = bounds.startY * tileSize
+    const right = (bounds.endX + 1) * tileSize
+    const bottom = (bounds.endY + 1) * tileSize
+    const alpha = cameraScale < 0.5 ? 0.17 : cameraScale < 0.9 ? 0.12 : 0.08
+
+    context.save()
+    context.strokeStyle = `rgba(58, 49, 35, ${alpha})`
+    context.lineWidth = 1 / cameraScale
+    context.beginPath()
+    for (let x = bounds.startX; x <= bounds.endX + 1; x += 1) {
+        const lineX = x * tileSize
+        context.moveTo(lineX, top)
+        context.lineTo(lineX, bottom)
+    }
+    for (let y = bounds.startY; y <= bounds.endY + 1; y += 1) {
+        const lineY = y * tileSize
+        context.moveTo(left, lineY)
+        context.lineTo(right, lineY)
+    }
+    context.stroke()
+    context.restore()
 }

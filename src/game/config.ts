@@ -1,7 +1,6 @@
 import type {ObjectType, Terrain} from './types'
 
 export const tileSize = 64
-export const overviewCellSize = 8
 export const minScale = 0.28
 export const maxScale = 2.35
 export const maxPixelRatio = 2

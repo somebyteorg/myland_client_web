@@ -35,15 +35,16 @@ export function useMiniMapController(options: UseMiniMapControllerOptions) {
         active: false,
         id: -1,
     })
+    let drawFrame: number | null = null
 
     function setCanvas(canvas: HTMLCanvasElement) {
         canvasRef.value = canvas
         updateBounds()
         requestAnimationFrame(() => {
             updateBounds()
-            options.requestDraw()
+            requestDraw()
         })
-        options.requestDraw()
+        requestDraw()
     }
 
     function updateBounds() {
@@ -64,14 +65,21 @@ export function useMiniMapController(options: UseMiniMapControllerOptions) {
 
     function expand() {
         collapsed.value = false
+        updateBounds()
+        requestDraw()
     }
 
     function toggleCollapsed() {
         collapsed.value = !collapsed.value
         if (collapsed.value) dragging.value = false
+        else {
+            updateBounds()
+            requestDraw()
+        }
     }
 
     function draw() {
+        drawFrame = null
         if (collapsed.value) return
 
         const canvas = canvasRef.value
@@ -100,6 +108,19 @@ export function useMiniMapController(options: UseMiniMapControllerOptions) {
             worldWidth,
             worldHeight,
         })
+    }
+
+    function requestDraw() {
+        if (drawFrame !== null) return
+
+        drawFrame = window.requestAnimationFrame(draw)
+    }
+
+    function destroy() {
+        if (drawFrame !== null) {
+            window.cancelAnimationFrame(drawFrame)
+            drawFrame = null
+        }
     }
 
     function onWheel(event: WheelEvent) {
@@ -162,6 +183,7 @@ export function useMiniMapController(options: UseMiniMapControllerOptions) {
         options.camera.y = nextPosition.y
         options.clampCamera(mainBounds.width, mainBounds.height)
         options.requestDraw()
+        requestDraw()
     }
 
     return {
@@ -175,6 +197,8 @@ export function useMiniMapController(options: UseMiniMapControllerOptions) {
         expand,
         toggleCollapsed,
         draw,
+        destroy,
+        requestDraw,
         onWheel,
         onPointerDown,
         onPointerMove,

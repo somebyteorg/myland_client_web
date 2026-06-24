@@ -14,7 +14,13 @@
       @use-pioneer="$emit('usePioneer')"
   />
   <div class="top-right-hud">
-    <GameCalendarCard :loading="timeLoading" :time="time"/>
+    <GameCalendarCard
+        :debug-panel-visible="debugPanelVisible"
+        :debug-toggle-enabled="debugToggleEnabled"
+        :loading="timeLoading"
+        :time="time"
+        @toggle-debug-panel="$emit('toggleDebugPanel')"
+    />
     <GameOnlineStatus
         :player-id="playerId"
         @locate-player-home="$emit('locatePlayerHome', $event)"
@@ -53,6 +59,8 @@ defineProps<{
   }
   claimLoading: boolean
   claimMode: boolean
+  debugPanelVisible?: boolean
+  debugToggleEnabled?: boolean
   itemCatalog: GameItem[]
   landPlacementMode: 'pioneer' | 'deed' | null
   player: PlayerInfo | null
@@ -66,6 +74,7 @@ defineEmits<{
   locateChronicleTile: [location: PlayerChronicleLocation]
   locatePlayerHome: [playerId: string]
   playerCardResize: [height: number]
+  toggleDebugPanel: []
   useDeed: []
   usePioneer: []
 }>()

@@ -3,6 +3,7 @@ import {DEFAULT_HOME_COLOR, getThemeStrokeColor, hexToRgba, normalizeHexColor} f
 import {parseLandChunkKey, rectIntersectsBounds} from './landChunks'
 import type {TileBounds} from './landChunks'
 import type {MapObject, Tile} from './types'
+import type {PixiDrawContext} from './pixiDrawContext'
 
 type TileLookup = (x: number, y: number) => Tile | null
 type PlacementMode = 'pioneer' | 'deed' | null
@@ -28,19 +29,24 @@ export interface DrawOverlayHighlightsOptions {
     tileAt: TileLookup
 }
 
+export interface DrawOwnLandBoundaryHighlightsOptions {
+    cameraScale: number
+    ownLandColor?: string | null
+    tileAt: TileLookup
+}
+
 export interface DrawLandChunkLoadingOverlaysOptions {
     cameraScale: number
     loadingLandChunks: ReadonlySet<string>
+    loadingMapItemChunks: ReadonlySet<string>
 }
 
 export function drawOverlayHighlights(
-    context: CanvasRenderingContext2D,
+    context: PixiDrawContext,
     bounds: TileBounds,
     timestamp: number,
     options: DrawOverlayHighlightsOptions,
 ) {
-    drawOwnLandBoundaryHighlights(context, bounds, timestamp, options)
-
     for (let y = bounds.startY; y <= bounds.endY; y += 1) {
         for (let x = bounds.startX; x <= bounds.endX; x += 1) {
             const tile = options.tileAt(x, y)
@@ -54,11 +60,11 @@ export function drawOverlayHighlights(
     drawSelectedMapObjectOverlay(context, bounds, options.selectedMapObject)
 }
 
-function drawOwnLandBoundaryHighlights(
-    context: CanvasRenderingContext2D,
+export function drawOwnLandBoundaryHighlights(
+    context: PixiDrawContext,
     bounds: TileBounds,
     timestamp: number,
-    options: DrawOverlayHighlightsOptions,
+    options: DrawOwnLandBoundaryHighlightsOptions,
 ) {
     if (options.cameraScale < maxOwnerLabelScale) return
 
@@ -112,7 +118,7 @@ function drawOwnLandBoundaryHighlights(
     context.restore()
 }
 
-function getOwnLandHighlightColor(bounds: TileBounds, options: DrawOverlayHighlightsOptions) {
+function getOwnLandHighlightColor(bounds: TileBounds, options: DrawOwnLandBoundaryHighlightsOptions) {
     const explicitOwnerColor = normalizeHexColor(options.ownLandColor ?? '')
     if (explicitOwnerColor) return explicitOwnerColor
 
@@ -132,17 +138,45 @@ function isOwnLandTile(tile: Tile | null): tile is Tile {
 }
 
 export function drawLandChunkLoadingOverlays(
-    context: CanvasRenderingContext2D,
+    context: PixiDrawContext,
     bounds: TileBounds,
     timestamp: number,
     options: DrawLandChunkLoadingOverlaysOptions,
 ) {
-    if (options.loadingLandChunks.size === 0 || options.cameraScale < 0.28) return
+    if ((options.loadingLandChunks.size === 0 && options.loadingMapItemChunks.size === 0) || options.cameraScale < 0.28) return
 
     const pulse = 0.16 + Math.sin(timestamp / 260) * 0.05
 
     context.save()
-    for (const key of options.loadingLandChunks) {
+    drawChunkLoadingOverlayPass(context, bounds, options.loadingLandChunks, {
+        cameraScale: options.cameraScale,
+        fill: `rgba(255, 248, 220, ${pulse})`,
+        inset: 3,
+        stroke: 'rgba(255, 242, 167, 0.58)',
+    })
+    drawChunkLoadingOverlayPass(context, bounds, options.loadingMapItemChunks, {
+        cameraScale: options.cameraScale,
+        fill: `rgba(218, 239, 255, ${Math.max(0.1, pulse - 0.02)})`,
+        inset: 8,
+        stroke: 'rgba(143, 199, 232, 0.5)',
+    })
+    context.restore()
+}
+
+interface ChunkLoadingOverlayPassOptions {
+    cameraScale: number
+    fill: string
+    inset: number
+    stroke: string
+}
+
+function drawChunkLoadingOverlayPass(
+    context: PixiDrawContext,
+    bounds: TileBounds,
+    chunkKeys: ReadonlySet<string>,
+    options: ChunkLoadingOverlayPassOptions,
+) {
+    for (const key of chunkKeys) {
         const chunk = parseLandChunkKey(key)
         if (!chunk || !rectIntersectsBounds(chunk, bounds)) continue
 
@@ -150,20 +184,20 @@ export function drawLandChunkLoadingOverlays(
         const top = chunk.y * tileSize
         const width = chunk.w * tileSize
         const height = chunk.h * tileSize
+        const inset = Math.min(options.inset / options.cameraScale, Math.max(0, width / 2 - 2), Math.max(0, height / 2 - 2))
 
-        context.fillStyle = `rgba(255, 248, 220, ${pulse})`
+        context.fillStyle = options.fill
         context.fillRect(left, top, width, height)
-        context.strokeStyle = 'rgba(255, 242, 167, 0.58)'
+        context.strokeStyle = options.stroke
         context.lineWidth = Math.max(1.5, 2 / options.cameraScale)
         context.setLineDash([10 / options.cameraScale, 8 / options.cameraScale])
-        context.strokeRect(left + 3, top + 3, width - 6, height - 6)
+        context.strokeRect(left + inset, top + inset, width - inset * 2, height - inset * 2)
         context.setLineDash([])
     }
-    context.restore()
 }
 
 function drawTileOverlay(
-    context: CanvasRenderingContext2D,
+    context: PixiDrawContext,
     tile: Tile,
     timestamp: number,
     options: DrawOverlayHighlightsOptions,
@@ -197,7 +231,7 @@ function drawTileOverlay(
     }
 }
 
-function drawTileLoadingOverlay(context: CanvasRenderingContext2D, tile: Tile, timestamp: number) {
+function drawTileLoadingOverlay(context: PixiDrawContext, tile: Tile, timestamp: number) {
     const left = tile.x * tileSize
     const top = tile.y * tileSize
     const centerX = left + tileSize / 2
@@ -217,7 +251,7 @@ function drawTileLoadingOverlay(context: CanvasRenderingContext2D, tile: Tile, t
 }
 
 function drawClaimPreview(
-    context: CanvasRenderingContext2D,
+    context: PixiDrawContext,
     bounds: TileBounds,
     timestamp: number,
     options: DrawOverlayHighlightsOptions,
@@ -275,7 +309,7 @@ function drawClaimPreview(
 }
 
 function drawPioneerPreviewCoordinateLabel(
-    context: CanvasRenderingContext2D,
+    context: PixiDrawContext,
     left: number,
     top: number,
     size: number,
@@ -310,7 +344,7 @@ function drawPioneerPreviewCoordinateLabel(
     context.fillText(label, centerX, labelTop + height / 2)
 }
 
-function drawDeedPreviewIcon(context: CanvasRenderingContext2D, left: number, top: number, size: number, valid: boolean) {
+function drawDeedPreviewIcon(context: PixiDrawContext, left: number, top: number, size: number, valid: boolean) {
     const paperLeft = left + size * 0.25
     const paperTop = top + size * 0.2
     const paperWidth = size * 0.5
@@ -334,7 +368,7 @@ function drawDeedPreviewIcon(context: CanvasRenderingContext2D, left: number, to
     }
 }
 
-function drawSelectedMapObjectOverlay(context: CanvasRenderingContext2D, bounds: TileBounds, object: MapObject | null) {
+function drawSelectedMapObjectOverlay(context: PixiDrawContext, bounds: TileBounds, object: MapObject | null) {
     if (!object || !objectIntersectsBounds(object, bounds)) return
 
     const left = object.x * tileSize
@@ -357,7 +391,7 @@ function objectIntersectsBounds(object: MapObject, bounds: TileBounds) {
 }
 
 function triangle(
-    context: CanvasRenderingContext2D,
+    context: PixiDrawContext,
     ax: number,
     ay: number,
     bx: number,

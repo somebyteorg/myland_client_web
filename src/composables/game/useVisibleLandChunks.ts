@@ -14,7 +14,7 @@ interface UseVisibleLandChunksOptions {
     viewport: ViewportRect
     targetSize: number
     apiMaxSize: number
-    padding: number
+    padding: number | (() => number)
     isMapReady: () => boolean
     getMapWidth: () => number
     getMapHeight: () => number
@@ -24,10 +24,12 @@ interface UseVisibleLandChunksOptions {
 
 export function useVisibleLandChunks(options: UseVisibleLandChunksOptions) {
     function getRequests() {
-        const bounds = getViewportBounds(options.padding)
+        const bounds = getViewportBounds(resolvePadding())
         if (!bounds) return []
 
-        return getAlignedLandChunkRequests(bounds, getTargetSize(), options.getMapWidth(), options.getMapHeight())
+        return sortChunksByViewportCenter(
+            getAlignedLandChunkRequests(bounds, getTargetSize(), options.getMapWidth(), options.getMapHeight()),
+        )
     }
 
     function canLoad() {
@@ -51,10 +53,32 @@ export function useVisibleLandChunks(options: UseVisibleLandChunksOptions) {
         })
     }
 
+    function resolvePadding() {
+        return typeof options.padding === 'function' ? options.padding() : options.padding
+    }
+
+    function sortChunksByViewportCenter(chunks: ReturnType<typeof getAlignedLandChunkRequests>) {
+        const centerTileX = ((options.viewport.width / 2 - options.camera.x) / options.camera.scale) / tileSize
+        const centerTileY = ((options.viewport.height / 2 - options.camera.y) / options.camera.scale) / tileSize
+
+        return chunks.sort((left, right) => {
+            return getChunkDistanceToPoint(left, centerTileX, centerTileY) - getChunkDistanceToPoint(right, centerTileX, centerTileY)
+        })
+    }
+
     return {
         getRequests,
         canLoad,
         getTargetSize,
         getViewportBounds,
     }
+}
+
+function getChunkDistanceToPoint(chunk: { x: number; y: number; w: number; h: number }, x: number, y: number) {
+    const centerX = chunk.x + chunk.w / 2
+    const centerY = chunk.y + chunk.h / 2
+    const dx = centerX - x
+    const dy = centerY - y
+
+    return dx * dx + dy * dy
 }

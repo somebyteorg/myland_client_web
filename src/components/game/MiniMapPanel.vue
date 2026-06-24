@@ -45,17 +45,6 @@
         @pointercancel="$emit('pointerup', $event)"
         @wheel.prevent="$emit('wheel', $event)"
     ></canvas>
-    <div class="legend-list compact-legend">
-      <button
-          v-if="claimMode"
-          type="button"
-          :class="{ 'is-off': !filters.claimable }"
-          @click="$emit('filter', 'claimable')"
-      >
-        <i class="legend-claim"></i>
-        {{ claimFilterLabel }}
-      </button>
-    </div>
   </section>
 </template>
 
@@ -63,13 +52,11 @@
 import {computed, onMounted, ref, watch} from 'vue'
 import GameTooltip from '@/components/game/GameTooltip.vue'
 import {useFloatingTooltip} from '@/composables/useFloatingTooltip'
-import type {FilterKey} from '@/game/types'
 
 const props = defineProps<{
   collapsed: boolean
   claimMode: boolean
   dragging: boolean
-  filters: Record<FilterKey, boolean>
   mapName?: string
   placementMode: 'pioneer' | 'deed' | null
 }>()
@@ -77,7 +64,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   collapse: []
   expand: []
-  filter: [key: FilterKey]
   locateClaim: []
   locatePlayer: []
   mounted: [canvas: HTMLCanvasElement]
@@ -249,54 +235,6 @@ function showLocateClaimTooltip(event: MouseEvent | FocusEvent) {
   cursor: crosshair;
 }
 
-.legend-list {
-  display: grid;
-  gap: 8px;
-  color: #5f5139;
-  font-size: 13px;
-}
-
-.legend-list i {
-  width: 18px;
-  height: 14px;
-  border: 1px solid rgb(75 61 34 / 20%);
-  border-radius: 3px;
-}
-
-.legend-claim {
-  background: #ffd657;
-}
-
-.compact-legend {
-  grid-template-columns: repeat(auto-fit, minmax(94px, 1fr));
-  margin-top: 10px;
-}
-
-.compact-legend button {
-  display: flex;
-  width: 100%;
-  min-height: 30px;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid #d8c18d;
-  border-radius: 8px;
-  background: rgb(255 249 234 / 80%);
-  padding: 0 7px;
-  color: #443721;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.compact-legend button.is-off {
-  opacity: 0.46;
-  filter: saturate(0.35);
-}
-
-.compact-legend i {
-  width: 15px;
-  height: 12px;
-}
-
 @media (max-width: 900px) {
   .minimap-panel {
     right: 12px;
@@ -316,15 +254,5 @@ function showLocateClaimTooltip(event: MouseEvent | FocusEvent) {
     padding: 9px;
   }
 
-  .compact-legend {
-    grid-template-columns: 1fr;
-    gap: 6px;
-  }
-
-  .compact-legend button {
-    min-height: 26px;
-    padding: 0 6px;
-    font-size: 11px;
-  }
 }
 </style>

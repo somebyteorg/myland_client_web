@@ -1,18 +1,20 @@
 import {getThemeStrokeColor, hexToRgba, mixHexColor, resolveThemeColor} from './colorUtils'
 import {tileSize} from './config'
 import type {MapObject} from './types'
+import type {PixiDrawContext} from './pixiDrawContext'
 
 type StatueImageStatus = 'loading' | 'ready' | 'error'
 
 interface StatueImageCacheEntry {
-    image: HTMLImageElement
+    image: CanvasImageSource | null
+    sourceImage: HTMLImageElement
     status: StatueImageStatus
 }
 
 interface CircularStatueOptions {
     centerX: number
     centerY: number
-    image: HTMLImageElement | null
+    image: CanvasImageSource | null
     radius: number
     shimmer: number
     strokeColor: string
@@ -22,7 +24,7 @@ interface CircularStatueOptions {
 const statueImageCache = new Map<string, StatueImageCacheEntry>()
 
 export function drawPlayerStatueObject(
-    context: CanvasRenderingContext2D,
+    context: PixiDrawContext,
     object: MapObject,
     timestamp: number,
     requestDraw: () => void,
@@ -63,12 +65,15 @@ function getPlayerStatueImage(url: string | null | undefined, requestDraw: () =>
 
     const image = new Image()
     const entry: StatueImageCacheEntry = {
-        image,
+        image: null,
+        sourceImage: image,
         status: 'loading',
     }
     statueImageCache.set(source, entry)
+    image.crossOrigin = 'anonymous'
     image.onload = () => {
-        entry.status = 'ready'
+        entry.image = createHighResolutionStatueImage(image)
+        entry.status = entry.image ? 'ready' : 'error'
         requestDraw()
     }
     image.onerror = () => {
@@ -80,7 +85,7 @@ function getPlayerStatueImage(url: string | null | undefined, requestDraw: () =>
     return null
 }
 
-function drawCircularStatue(context: CanvasRenderingContext2D, options: CircularStatueOptions) {
+function drawCircularStatue(context: PixiDrawContext, options: CircularStatueOptions) {
     const {centerX, centerY, image, radius, shimmer, strokeColor, themeColor} = options
     const outlineColor = mixHexColor(strokeColor, '#3a3123', 0.58)
     const stoneLight = mixHexColor(themeColor, '#f2ecdc', 0.78)
@@ -144,7 +149,7 @@ function drawCircularStatue(context: CanvasRenderingContext2D, options: Circular
 }
 
 function drawCircularDepth(
-    context: CanvasRenderingContext2D,
+    context: PixiDrawContext,
     centerX: number,
     centerY: number,
     radius: number,
@@ -197,11 +202,11 @@ function drawCircularDepth(
 }
 
 function drawCircularRelief(
-    context: CanvasRenderingContext2D,
+    context: PixiDrawContext,
     options: {
         centerX: number
         centerY: number
-        image: HTMLImageElement | null
+        image: CanvasImageSource | null
         radius: number
         shimmer: number
         strokeColor: string
@@ -251,7 +256,7 @@ function drawCircularRelief(
 }
 
 function drawReliefFallback(
-    context: CanvasRenderingContext2D,
+    context: PixiDrawContext,
     centerX: number,
     centerY: number,
     radius: number,
@@ -281,7 +286,7 @@ function drawReliefFallback(
 }
 
 function drawCircularMarks(
-    context: CanvasRenderingContext2D,
+    context: PixiDrawContext,
     centerX: number,
     centerY: number,
     radius: number,
@@ -308,20 +313,73 @@ function drawCircularMarks(
 }
 
 function drawStatueImageCover(
-    context: CanvasRenderingContext2D,
-    image: HTMLImageElement,
+    context: PixiDrawContext,
+    image: CanvasImageSource,
     left: number,
     top: number,
     width: number,
     height: number,
 ) {
-    const scale = Math.max(width / image.width, height / image.height)
-    const drawWidth = image.width * scale
-    const drawHeight = image.height * scale
+    const sourceWidth = getImageSourceWidth(image)
+    const sourceHeight = getImageSourceHeight(image)
+    if (sourceWidth <= 0 || sourceHeight <= 0) return
+
+    const scale = Math.max(width / sourceWidth, height / sourceHeight)
+    const drawWidth = sourceWidth * scale
+    const drawHeight = sourceHeight * scale
     const drawLeft = left + (width - drawWidth) / 2
     const drawTop = top + (height - drawHeight) / 2
 
     context.imageSmoothingEnabled = true
     context.imageSmoothingQuality = 'high'
     context.drawImage(image, drawLeft, drawTop, drawWidth, drawHeight)
+}
+
+function createHighResolutionStatueImage(image: HTMLImageElement) {
+    const sourceWidth = image.naturalWidth || image.width
+    const sourceHeight = image.naturalHeight || image.height
+    if (sourceWidth <= 0 || sourceHeight <= 0) return null
+
+    const targetSize = Math.min(512, Math.max(192, sourceWidth, sourceHeight))
+    const scale = Math.max(1, targetSize / Math.max(sourceWidth, sourceHeight))
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.max(1, Math.round(sourceWidth * scale))
+    canvas.height = Math.max(1, Math.round(sourceHeight * scale))
+
+    const context = canvas.getContext('2d')
+    if (!context) return null
+
+    try {
+        context.imageSmoothingEnabled = true
+        context.imageSmoothingQuality = 'high'
+        context.drawImage(image, 0, 0, canvas.width, canvas.height)
+        context.getImageData(0, 0, 1, 1)
+    } catch (error) {
+        console.warn('Player statue image is not CORS-safe for WebGL texture upload.', error)
+        return null
+    }
+
+    return canvas
+}
+
+function getImageSourceWidth(image: CanvasImageSource) {
+    if (image instanceof HTMLImageElement) return image.naturalWidth || image.width
+    if (image instanceof HTMLVideoElement) return image.videoWidth
+    if (typeof VideoFrame !== 'undefined' && image instanceof VideoFrame) return image.displayWidth
+    if (image instanceof SVGImageElement) return image.width.baseVal.value
+    if (image instanceof HTMLCanvasElement || image instanceof ImageBitmap) return image.width
+    if (typeof OffscreenCanvas !== 'undefined' && image instanceof OffscreenCanvas) return image.width
+
+    return 0
+}
+
+function getImageSourceHeight(image: CanvasImageSource) {
+    if (image instanceof HTMLImageElement) return image.naturalHeight || image.height
+    if (image instanceof HTMLVideoElement) return image.videoHeight
+    if (typeof VideoFrame !== 'undefined' && image instanceof VideoFrame) return image.displayHeight
+    if (image instanceof SVGImageElement) return image.height.baseVal.value
+    if (image instanceof HTMLCanvasElement || image instanceof ImageBitmap) return image.height
+    if (typeof OffscreenCanvas !== 'undefined' && image instanceof OffscreenCanvas) return image.height
+
+    return 0
 }

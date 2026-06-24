@@ -1,5 +1,15 @@
 <template>
-  <section class="calendar-card" :aria-busy="loading">
+  <section
+      class="calendar-card"
+      :class="{ 'is-debug-active': debugPanelVisible }"
+      :aria-busy="loading"
+      :aria-pressed="debugToggleEnabled ? debugPanelVisible : undefined"
+      :role="debugToggleEnabled ? 'button' : undefined"
+      :tabindex="debugToggleEnabled ? 0 : undefined"
+      @click="handleClick"
+      @keydown.enter.prevent="handleToggle"
+      @keydown.space.prevent="handleToggle"
+  >
     <span>{{ timeLabel }}</span>
   </section>
 </template>
@@ -11,6 +21,12 @@ import type {GameTimeInfo} from '@/game/homeTypes'
 const props = defineProps<{
   time: GameTimeInfo | null
   loading: boolean
+  debugPanelVisible?: boolean
+  debugToggleEnabled?: boolean
+}>()
+
+const emit = defineEmits<{
+  toggleDebugPanel: []
 }>()
 
 const timeLabel = computed(() => {
@@ -19,6 +35,16 @@ const timeLabel = computed(() => {
 
   return `地元${props.time.year}年 · ${props.time.season} · 第${props.time.day}日 · ${props.time.hour}`
 })
+
+function handleClick() {
+  handleToggle()
+}
+
+function handleToggle() {
+  if (!props.debugToggleEnabled) return
+
+  emit('toggleDebugPanel')
+}
 </script>
 
 <style>
@@ -40,11 +66,21 @@ const timeLabel = computed(() => {
   backdrop-filter: blur(8px);
 }
 
+.calendar-card[role='button'] {
+  cursor: pointer;
+}
+
 .calendar-card:hover,
 .calendar-card:focus-within {
   border-color: rgb(216 193 141 / 52%);
   background: rgb(255 247 223 / 72%);
   opacity: 0.96;
+}
+
+.calendar-card.is-debug-active {
+  border-color: rgb(99 127 67 / 68%);
+  background: rgb(238 248 213 / 82%);
+  opacity: 1;
 }
 
 .calendar-card span {

@@ -1,8 +1,9 @@
 import {tileSize} from './config'
 import {getThemeStrokeColor, getThemeStructureColor, hexToRgba, mixHexColor, resolveThemeColor} from './colorUtils'
 import type {MapObject} from './types'
+import type {PixiDrawContext} from './pixiDrawContext'
 
-export function drawHomeObject(context: CanvasRenderingContext2D, object: MapObject, timestamp: number) {
+export function drawHomeObject(context: PixiDrawContext, object: MapObject, timestamp = 0) {
     const left = object.x * tileSize
     const top = object.y * tileSize
     const width = object.width * tileSize
@@ -86,7 +87,7 @@ export function drawHomeObject(context: CanvasRenderingContext2D, object: MapObj
     context.restore()
 }
 
-export function drawHomeSmoke(context: CanvasRenderingContext2D, x: number, y: number, timestamp: number, level: number) {
+export function drawHomeSmoke(context: PixiDrawContext, x: number, y: number, timestamp: number, level: number) {
     if (level < 2) return
 
     const time = timestamp / 1000
@@ -100,7 +101,7 @@ export function drawHomeSmoke(context: CanvasRenderingContext2D, x: number, y: n
     }
 }
 
-export function drawWatchdogObject(context: CanvasRenderingContext2D, object: MapObject, timestamp: number) {
+export function drawWatchdogObject(context: PixiDrawContext, object: MapObject, timestamp: number) {
     const position = getWatchdogPosition(object)
     const x = position.x
     const y = position.y
@@ -156,7 +157,7 @@ export function getWatchdogPosition(object: MapObject) {
     }
 }
 
-export function drawScarecrowObject(context: CanvasRenderingContext2D, object: MapObject, timestamp: number) {
+export function drawScarecrowObject(context: PixiDrawContext, object: MapObject, timestamp: number) {
     const centerX = (object.x + 0.5) * tileSize
     const baseY = (object.y + 0.82) * tileSize
     const sway = Math.sin(timestamp / 360 + object.level) * (4 + object.level)
@@ -215,7 +216,7 @@ export function drawScarecrowObject(context: CanvasRenderingContext2D, object: M
     drawLevelBadge(context, object.level, centerX + 18, baseY - 58)
 }
 
-export function drawLevelBadge(context: CanvasRenderingContext2D, level: number, x: number, y: number) {
+export function drawLevelBadge(context: PixiDrawContext, level: number, x: number, y: number) {
     context.fillStyle = 'rgba(60, 49, 32, 0.78)'
     context.beginPath()
     context.roundRect(x - 12, y - 8, 24, 16, 5)
@@ -229,7 +230,7 @@ export function drawLevelBadge(context: CanvasRenderingContext2D, level: number,
     context.textBaseline = 'alphabetic'
 }
 
-function triangle(context: CanvasRenderingContext2D, ax: number, ay: number, bx: number, by: number, cx: number, cy: number) {
+function triangle(context: PixiDrawContext, ax: number, ay: number, bx: number, by: number, cx: number, cy: number) {
     context.beginPath()
     context.moveTo(ax, ay)
     context.lineTo(bx, by)

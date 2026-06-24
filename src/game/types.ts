@@ -1,6 +1,5 @@
 export type Terrain = 'grass' | 'field' | 'home' | 'water' | 'mountain'
 export type OwnerType = 'player' | 'neighbor' | 'none' | 'village'
-export type FilterKey = 'claimable'
 export type PlantType = number
 export type FarmTool = 'inspect' | 'shovel' | PlantType
 export type CropStatus = 'seed' | 'growing' | 'harvestable' | 'withered'
@@ -371,6 +370,7 @@ export interface OwnerLabelCluster {
     maxX: number
     minY: number
     maxY: number
+    tileKeys: Set<string>
 }
 
 export interface MapJson {

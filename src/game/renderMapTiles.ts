@@ -1,21 +1,25 @@
 import {tileSize, terrainBrightColors, terrainColors, terrainDarkColors} from './config'
 import {getThemeStrokeColor, hexToRgba, resolveThemeColor} from './colorUtils'
 import {hash} from './mapData'
+import {getOverviewTileColor} from './tileColor'
 import type {Tile} from './types'
+import type {PixiDrawContext} from './pixiDrawContext'
 
 type TileLookup = (x: number, y: number) => Tile | null
 
 export function drawStaticTile(
-    context: CanvasRenderingContext2D,
+    context: PixiDrawContext,
     tile: Tile,
     tileAt: TileLookup,
     mapWidth: number,
+    cameraScale = 1,
 ) {
     const left = tile.x * tileSize
     const top = tile.y * tileSize
 
     if (tile.terrain === 'mountain') {
         drawStaticMountainRidge(context, tile, left, top, mapWidth)
+        drawStaticTileGrid(context, left, top)
         return
     }
 
@@ -35,9 +39,124 @@ export function drawStaticTile(
     if (tile.terrain === 'field') drawStaticFieldBase(context, tile, left, top)
     if (tile.terrain === 'home') drawStaticHomeGround(context, tile, left, top)
     if (tile.terrain === 'water') drawStaticWater(context, tile, left, top, tileAt)
+    drawHighZoomTileDetail(context, tile, left, top, cameraScale)
+    drawStaticTileGrid(context, left, top)
 }
 
-function drawThemeColorWash(context: CanvasRenderingContext2D, tile: Tile, left: number, top: number) {
+export function drawOverviewStaticTile(context: PixiDrawContext, tile: Tile) {
+    const left = tile.x * tileSize
+    const top = tile.y * tileSize
+
+    context.fillStyle = getOverviewTileColor(tile)
+    context.fillRect(left, top, tileSize, tileSize)
+
+    if (tile.terrain === 'water') {
+        context.fillStyle = 'rgba(170, 239, 232, 0.22)'
+        context.fillRect(left + 5, top + 5, tileSize - 10, tileSize - 10)
+    } else if (tile.terrain === 'field') {
+        context.strokeStyle = tile.ownerType === 'player' ? 'rgba(255, 239, 150, 0.24)' : 'rgba(255, 235, 172, 0.18)'
+        context.lineWidth = 1.4
+        context.beginPath()
+        context.moveTo(left + 9, top + 23)
+        context.lineTo(left + tileSize - 9, top + 19)
+        context.moveTo(left + 9, top + 43)
+        context.lineTo(left + tileSize - 9, top + 39)
+        context.stroke()
+    }
+
+    drawStaticTileGrid(context, left, top, 0.11)
+}
+
+function drawStaticTileGrid(context: PixiDrawContext, left: number, top: number, alpha = 0.08) {
+    context.strokeStyle = `rgba(58, 49, 35, ${alpha})`
+    context.lineWidth = 1
+    context.strokeRect(left + 0.5, top + 0.5, tileSize - 1, tileSize - 1)
+}
+
+function drawHighZoomTileDetail(context: PixiDrawContext, tile: Tile, left: number, top: number, cameraScale: number) {
+    if (cameraScale < 1.35) return
+
+    context.save()
+    context.lineCap = 'round'
+    context.lineJoin = 'round'
+
+    if (tile.terrain === 'grass') {
+        drawHighZoomGrassDetail(context, tile, left, top)
+    } else if (tile.terrain === 'field') {
+        drawHighZoomFieldDetail(context, tile, left, top)
+    } else if (tile.terrain === 'home') {
+        drawHighZoomHomeGroundDetail(context, left, top)
+    } else if (tile.terrain === 'water') {
+        drawHighZoomWaterDetail(context, tile, left, top)
+    }
+
+    context.strokeStyle = 'rgba(50, 42, 30, 0.12)'
+    context.lineWidth = 1 / cameraScale
+    context.strokeRect(left + 1, top + 1, tileSize - 2, tileSize - 2)
+    context.restore()
+}
+
+function drawHighZoomGrassDetail(context: PixiDrawContext, tile: Tile, left: number, top: number) {
+    for (let index = 0; index < 5; index += 1) {
+        const seed = hash(tile.x + index * 23, tile.y + index * 29)
+        const x = left + 9 + seed * 46
+        const y = top + 12 + hash(tile.x + index * 31, tile.y + index * 37) * 38
+
+        drawGrassBlade(context, x, y, 7 + seed * 4, 2 + seed * 2, 'rgba(34, 104, 39, 0.28)', 0.9)
+    }
+}
+
+function drawHighZoomFieldDetail(context: PixiDrawContext, tile: Tile, left: number, top: number) {
+    const ridgeColor = tile.ownerType === 'player' ? 'rgba(255, 244, 166, 0.36)' : 'rgba(255, 240, 190, 0.26)'
+
+    context.strokeStyle = ridgeColor
+    context.lineWidth = 1.1
+    for (let index = 0; index < 5; index += 1) {
+        const y = top + 11 + index * 10
+
+        context.beginPath()
+        context.moveTo(left + 7, y)
+        context.quadraticCurveTo(left + 30, y - 4, left + 57, y + 1)
+        context.stroke()
+    }
+
+    context.strokeStyle = 'rgba(86, 63, 27, 0.08)'
+    context.lineWidth = 0.55
+    for (let index = 0; index < 4; index += 1) {
+        const x = left + 12 + index * 13
+
+        context.beginPath()
+        context.moveTo(x, top + 9)
+        context.lineTo(x + 4, top + 55)
+        context.stroke()
+    }
+}
+
+function drawHighZoomHomeGroundDetail(context: PixiDrawContext, left: number, top: number) {
+    context.strokeStyle = 'rgba(255, 248, 220, 0.34)'
+    context.lineWidth = 1
+    context.beginPath()
+    context.moveTo(left + 14, top + 32)
+    context.lineTo(left + 50, top + 32)
+    context.moveTo(left + 32, top + 14)
+    context.lineTo(left + 32, top + 50)
+    context.stroke()
+}
+
+function drawHighZoomWaterDetail(context: PixiDrawContext, tile: Tile, left: number, top: number) {
+    context.strokeStyle = 'rgba(236, 255, 247, 0.4)'
+    context.lineWidth = 0.95
+    for (let index = 0; index < 4; index += 1) {
+        const x = left + 10 + hash(tile.x + index * 17, tile.y + 3) * 42
+        const y = top + 13 + hash(tile.x + 5, tile.y + index * 19) * 38
+
+        context.beginPath()
+        context.ellipse(x, y, 7 + index * 0.7, 1.8, hash(tile.x + index, tile.y) * 0.6 - 0.3, 0, Math.PI * 1.2)
+        context.stroke()
+    }
+}
+
+function drawThemeColorWash(context: PixiDrawContext, tile: Tile, left: number, top: number) {
     const themeColor = resolveThemeColor(tile.themeColor, '#d8b85b')
     const wash = hexToRgba(themeColor, tile.terrain === 'home' ? 0.78 : 0.26)
     const edge = hexToRgba(getThemeStrokeColor(themeColor), tile.terrain === 'home' ? 0.9 : 0.5)
@@ -49,7 +168,7 @@ function drawThemeColorWash(context: CanvasRenderingContext2D, tile: Tile, left:
     context.strokeRect(left + 1, top + 1, tileSize - 2, tileSize - 2)
 }
 
-function drawStaticGrass(context: CanvasRenderingContext2D, tile: Tile, left: number, top: number) {
+function drawStaticGrass(context: PixiDrawContext, tile: Tile, left: number, top: number) {
     const count = (tile.x + tile.y) % 2 === 0 ? 4 : 2
 
     context.save()
@@ -72,7 +191,7 @@ function drawStaticGrass(context: CanvasRenderingContext2D, tile: Tile, left: nu
     context.restore()
 }
 
-function drawStaticFieldBase(context: CanvasRenderingContext2D, tile: Tile, left: number, top: number) {
+function drawStaticFieldBase(context: PixiDrawContext, tile: Tile, left: number, top: number) {
     const shadow = tile.ownerType === 'player' ? 'rgba(110, 88, 25, 0.78)' : 'rgba(92, 74, 34, 0.68)'
     const highlight = tile.ownerType === 'player' ? 'rgba(255, 239, 150, 0.38)' : 'rgba(255, 235, 172, 0.3)'
 
@@ -95,8 +214,8 @@ function drawStaticFieldBase(context: CanvasRenderingContext2D, tile: Tile, left
         context.stroke()
     }
 
-    context.strokeStyle = 'rgba(93, 72, 25, 0.16)'
-    context.lineWidth = 1
+    context.strokeStyle = 'rgba(93, 72, 25, 0.06)'
+    context.lineWidth = 0.7
     for (let i = 0; i < 3; i += 1) {
         const x = left + 16 + i * 16 + hash(tile.x + i, tile.y) * 4
         context.beginPath()
@@ -108,7 +227,7 @@ function drawStaticFieldBase(context: CanvasRenderingContext2D, tile: Tile, left
 }
 
 function drawGrassBlade(
-    context: CanvasRenderingContext2D,
+    context: PixiDrawContext,
     x: number,
     y: number,
     height: number,
@@ -124,7 +243,7 @@ function drawGrassBlade(
     context.stroke()
 }
 
-function drawStaticHomeGround(context: CanvasRenderingContext2D, tile: Tile, left: number, top: number) {
+function drawStaticHomeGround(context: PixiDrawContext, tile: Tile, left: number, top: number) {
     const color = resolveThemeColor(tile.themeColor)
     const strokeColor = getThemeStrokeColor(color)
 
@@ -152,7 +271,7 @@ function drawStaticHomeGround(context: CanvasRenderingContext2D, tile: Tile, lef
     context.restore()
 }
 
-function drawStaticWater(context: CanvasRenderingContext2D, tile: Tile, left: number, top: number, tileAt: TileLookup) {
+function drawStaticWater(context: PixiDrawContext, tile: Tile, left: number, top: number, tileAt: TileLookup) {
     const north = tileAt(tile.x, tile.y - 1)?.terrain === 'water'
     const south = tileAt(tile.x, tile.y + 1)?.terrain === 'water'
     const west = tileAt(tile.x - 1, tile.y)?.terrain === 'water'
@@ -194,7 +313,7 @@ function drawStaticWater(context: CanvasRenderingContext2D, tile: Tile, left: nu
     context.restore()
 }
 
-function drawWaterBank(context: CanvasRenderingContext2D, left: number, top: number, edge: 'north' | 'south' | 'west' | 'east', seed: number) {
+function drawWaterBank(context: PixiDrawContext, left: number, top: number, edge: 'north' | 'south' | 'west' | 'east', seed: number) {
     const wave = seed * 5 - 2.5
 
     context.beginPath()
@@ -218,7 +337,7 @@ function drawWaterBank(context: CanvasRenderingContext2D, left: number, top: num
     context.stroke()
 }
 
-function drawStaticMountainRidge(context: CanvasRenderingContext2D, tile: Tile, left: number, top: number, mapWidth: number) {
+function drawStaticMountainRidge(context: PixiDrawContext, tile: Tile, left: number, top: number, mapWidth: number) {
     const edge = tile.x === 0 ? 'west' : tile.x === mapWidth - 1 ? 'east' : tile.y === 0 ? 'north' : 'south'
     const inner = 8
     const ridge = 18
@@ -268,7 +387,7 @@ function drawStaticMountainRidge(context: CanvasRenderingContext2D, tile: Tile, 
     context.restore()
 }
 
-function drawMountainFacet(context: CanvasRenderingContext2D, left: number, top: number, edge: 'north' | 'south' | 'west' | 'east') {
+function drawMountainFacet(context: PixiDrawContext, left: number, top: number, edge: 'north' | 'south' | 'west' | 'east') {
     const centerX = left + tileSize / 2
     const centerY = top + tileSize / 2
 

@@ -124,7 +124,7 @@ function getLandOwnerName(item: MapLandChunkItem, ownerType: OwnerType, options:
     const knownName = getKnownPlayerName(playerId, options.mapObjects)
     if (knownName) return knownName
 
-    return playerId ? `玩家${playerId.slice(0, 4)}` : '邻居'
+    return playerId || '邻居'
 }
 
 function getKnownPlayerName(playerId: string | null | undefined, mapObjects: MapObject[]) {

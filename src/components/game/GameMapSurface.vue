@@ -29,7 +29,7 @@
   >
     <div class="land-hover-header">
       <strong>{{ statueHoverTitle }}</strong>
-      <small>{{ statueHoverCoordinate }}</small>
+      <small class="land-hover-coordinate">{{ statueHoverCoordinate }}</small>
     </div>
     <span>{{ statueHoverDescription }}</span>
   </section>
@@ -76,7 +76,7 @@
   >
     <div class="land-hover-header">
       <strong>{{ landHoverTitle }}</strong>
-      <small v-if="landHoverCoordinate">{{ landHoverCoordinate }}</small>
+      <small v-if="landHoverCoordinate" class="land-hover-coordinate">{{ landHoverCoordinate }}</small>
     </div>
     <span>{{ landHoverDescription }}</span>
   </section>
@@ -479,7 +479,8 @@ const statueHoverCardStyle = computed(() => {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
+  min-width: 0;
 }
 
 .land-hover-card strong,
@@ -490,23 +491,31 @@ const statueHoverCardStyle = computed(() => {
 }
 
 .land-hover-card strong {
+  min-width: 0;
   font-size: 14px;
   font-weight: 900;
   line-height: 1;
 }
 
-.land-hover-card small {
-  display: inline-grid;
-  min-width: 58px;
-  min-height: 20px;
+.land-hover-coordinate {
+  display: inline-flex;
+  width: max-content;
+  min-width: 0;
+  height: 17px;
+  align-items: center;
+  justify-content: center;
   place-items: center;
   border: 1px solid rgb(154 118 58 / 34%);
-  border-radius: 6px;
-  background: rgb(255 236 171 / 72%);
+  border-radius: 5px;
+  background: rgb(255 238 184 / 68%);
   color: #6b4d1f;
-  font-size: 11px;
+  padding: 0 5px;
+  font-size: 10px;
   font-weight: 900;
   letter-spacing: 0;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .land-hover-card span {

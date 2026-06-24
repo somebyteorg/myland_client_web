@@ -3,6 +3,7 @@ import {tileSize} from './config'
 import {getWatchdogPosition} from './renderObjects'
 import type {TileBounds} from './landChunks'
 import type {Butterfly, MapObject, Tile} from './types'
+import type {PixiDrawContext} from './pixiDrawContext'
 
 type TileLookup = (x: number, y: number) => Tile | null
 
@@ -25,7 +26,7 @@ export interface DrawTheftCluesOptions {
 }
 
 export function drawGrassWind(
-    context: CanvasRenderingContext2D,
+    context: PixiDrawContext,
     bounds: TileBounds,
     timestamp: number,
     options: DrawGrassWindOptions,
@@ -68,7 +69,7 @@ export function drawGrassWind(
 }
 
 export function drawButterflies(
-    context: CanvasRenderingContext2D,
+    context: PixiDrawContext,
     bounds: TileBounds,
     timestamp: number,
     options: DrawButterfliesOptions,
@@ -100,7 +101,7 @@ export function drawButterflies(
 }
 
 export function drawTheftClues(
-    context: CanvasRenderingContext2D,
+    context: PixiDrawContext,
     bounds: TileBounds,
     timestamp: number,
     options: DrawTheftCluesOptions,
@@ -116,7 +117,7 @@ export function drawTheftClues(
     }
 }
 
-function drawFootprints(context: CanvasRenderingContext2D, tile: Tile, timestamp: number) {
+function drawFootprints(context: PixiDrawContext, tile: Tile, timestamp: number) {
     const left = tile.x * tileSize
     const top = tile.y * tileSize
     const alpha = 0.45 + Math.sin(timestamp / 320 + tile.x) * 0.12
@@ -142,7 +143,7 @@ function drawFootprints(context: CanvasRenderingContext2D, tile: Tile, timestamp
 }
 
 function drawDogBarkAlert(
-    context: CanvasRenderingContext2D,
+    context: PixiDrawContext,
     tile: Tile,
     dog: MapObject,
     timestamp: number,
