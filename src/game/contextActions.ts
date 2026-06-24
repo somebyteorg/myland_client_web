@@ -40,6 +40,7 @@ export function getTileContextActions(
 
     if (options.canUseDeedAt(tile)) actions.push('扩张')
     if (!object && options.canBuildPlayerStatueTile(tile)) actions.push(BUILD_PLAYER_STATUE_ACTION)
+    if (object?.type === 'player_statue') return actions
 
     if (tile.ownerType === 'player') {
         // const actionObjects = object ? [object] : options.getObjectsAtTile(tile)

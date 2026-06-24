@@ -29,9 +29,11 @@
   >
     <div class="land-hover-header">
       <strong>{{ statueHoverTitle }}</strong>
+    </div>
+    <div class="statue-hover-meta-row">
+      <span>{{ statueHoverDescription }}</span>
       <small class="land-hover-coordinate">{{ statueHoverCoordinate }}</small>
     </div>
-    <span>{{ statueHoverDescription }}</span>
   </section>
 
   <section
@@ -176,6 +178,7 @@ const avatarUrl = computed(() => {
   return avatar || ''
 })
 const statueHoverTitle = computed(() => hoverObject.value?.playerStatueName?.trim() || '未命名雕像')
+const statueHoverTitleLength = computed(() => Array.from(statueHoverTitle.value).length)
 const statueHoverCoordinate = computed(() => {
   const statue = hoverObject.value
   if (!statue) return ''
@@ -239,8 +242,9 @@ const landHoverCardStyle = computed(() => {
 })
 const statueHoverCardStyle = computed(() => {
   const margin = 12
-  const width = 286
-  const height = 116
+  const width = Math.min(360, Math.max(286, 178 + statueHoverTitleLength.value * 6))
+  const titleLines = Math.max(1, Math.ceil(statueHoverTitleLength.value / 16))
+  const height = 82 + titleLines * 20
   const x = Math.min(window.innerWidth - width - margin, Math.max(margin, props.homeHoverCard.x + 16))
   const y = Math.min(window.innerHeight - height - margin, Math.max(margin, props.homeHoverCard.y + 16))
 
@@ -248,6 +252,7 @@ const statueHoverCardStyle = computed(() => {
     borderColor: themeStrokeColor.value,
     left: `${x}px`,
     top: `${y}px`,
+    width: `${width}px`,
   }
 })
 </script>
@@ -454,25 +459,56 @@ const statueHoverCardStyle = computed(() => {
 }
 
 .statue-hover-card {
-  width: 286px;
   min-height: 74px;
+  gap: 8px;
+  background:
+      linear-gradient(180deg, rgb(255 250 232 / 98%), rgb(244 233 203 / 96%));
+  padding: 11px 12px;
 }
 
 .statue-hover-card .land-hover-header {
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
 }
 
-.statue-hover-card strong,
-.statue-hover-card span {
+.land-hover-card.statue-hover-card strong,
+.land-hover-card.statue-hover-card span {
   overflow: visible;
   text-overflow: clip;
   white-space: normal;
+  overflow-wrap: anywhere;
   word-break: break-word;
 }
 
-.statue-hover-card span {
-  line-height: 1.35;
+.land-hover-card.statue-hover-card strong {
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+.land-hover-card.statue-hover-card span {
+  color: #665136;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.statue-hover-meta-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.statue-hover-meta-row span {
+  min-width: 0;
+  flex: 1;
+}
+
+.statue-hover-meta-row .land-hover-coordinate {
+  flex: 0 0 auto;
+  border-radius: 6px;
+  padding: 2px 6px;
 }
 
 .land-hover-header {

@@ -745,6 +745,8 @@ const playerStatue = usePlayerStatueController({
   hideHomeHoverCard,
   hideLandHoverCard,
   focusTile: mapNavigation.focusTile,
+  focusMapObject: mapNavigation.focusMapObject,
+  getMapObjects: () => mapObjects,
   refreshMapItems,
   refreshClaimInventory,
   setPlayerStatueInventoryQuantity,

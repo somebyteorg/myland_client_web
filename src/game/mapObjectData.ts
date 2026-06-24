@@ -1,4 +1,5 @@
 import {toOwnerType} from './ownerTypes'
+import {PLAYER_STATUE_MIN_FOOTPRINT_SIZE} from './playerStatueConfig'
 import type {MapItemOwnerData, MapItemResponse, MapObject, NeighborInfoResponse, Tile} from './types'
 
 export interface MapItemOccupiedRect {
@@ -29,8 +30,8 @@ export function createPlayerStatueObjectFromItem(item: MapItemResponse, index: n
         type: 'player_statue',
         x: item.x,
         y: item.y,
-        width: item.width,
-        height: item.height,
+        width: normalizePlayerStatueDimension(item.width),
+        height: normalizePlayerStatueDimension(item.height),
         level: Math.max(1, item.level),
         ownerType: toOwnerType(item.owner_type, item.owner_data?.player_id, currentPlayerId),
         ownerData: createMapItemOwnerData(item),
@@ -56,12 +57,12 @@ export function createMapObjectsFromItems(items: MapItemResponse[], currentPlaye
 
 export function createOccupiedRectsFromItems(items: MapItemResponse[]): MapItemOccupiedRect[] {
     return items
-        .filter((item) => item.width > 0 && item.height > 0)
+        .filter((item) => item.item_type === 'player_statue' || (item.width > 0 && item.height > 0))
         .map((item) => ({
             x: item.x,
             y: item.y,
-            width: Math.max(1, item.width),
-            height: Math.max(1, item.height),
+            width: item.item_type === 'player_statue' ? normalizePlayerStatueDimension(item.width) : normalizeMapItemDimension(item.width),
+            height: item.item_type === 'player_statue' ? normalizePlayerStatueDimension(item.height) : normalizeMapItemDimension(item.height),
         }))
 }
 
@@ -145,4 +146,12 @@ function getPlayerStatueName(item: MapItemResponse) {
 
 function getPlayerStatueUrl(item: MapItemResponse) {
     return item.item_data?.player_statue_url?.trim() || null
+}
+
+function normalizeMapItemDimension(value: number) {
+    return Number.isFinite(value) ? Math.max(1, value) : 1
+}
+
+function normalizePlayerStatueDimension(value: number) {
+    return Math.max(PLAYER_STATUE_MIN_FOOTPRINT_SIZE, normalizeMapItemDimension(value))
 }

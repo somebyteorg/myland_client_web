@@ -1,4 +1,5 @@
 import {canShowHarvestActionStatus, isCropFinalStatus} from './cropLifecycle'
+import {PLAYER_STATUE_MIN_FOOTPRINT_SIZE} from './playerStatueConfig'
 import type {MapObject, Tile} from './types'
 
 type TileRect = Pick<MapObject, 'x' | 'y' | 'width' | 'height' | 'type' | 'level' | 'id' | 'state' | 'ownerType'>
@@ -107,12 +108,17 @@ export function canBuildPlayerStatueTile(
         isRiverTile: (x: number, y: number) => boolean
     },
 ) {
-    const target = options.tileAt(tile.x, tile.y)
-    if (!target) return false
-    if (target.terrain !== 'grass' || target.ownerType !== 'none' || target.plant || target.landId) return false
-    if (options.isRiverTile(target.x, target.y)) return false
-    if (isTileOccupiedByRect(target, options.occupiedRects)) return false
-    if (objectsAtTile(target, options.mapObjects).length > 0) return false
+    for (let y = tile.y; y < tile.y + PLAYER_STATUE_MIN_FOOTPRINT_SIZE; y += 1) {
+        for (let x = tile.x; x < tile.x + PLAYER_STATUE_MIN_FOOTPRINT_SIZE; x += 1) {
+            const target = options.tileAt(x, y)
+
+            if (!target) return false
+            if (target.terrain !== 'grass' || target.ownerType !== 'none' || target.plant || target.landId) return false
+            if (options.isRiverTile(target.x, target.y)) return false
+            if (isTileOccupiedByRect(target, options.occupiedRects)) return false
+            if (objectsAtTile(target, options.mapObjects).length > 0) return false
+        }
+    }
 
     return true
 }

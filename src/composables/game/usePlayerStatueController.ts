@@ -1,8 +1,8 @@
 import {reactive} from 'vue'
 import type {LandChunkRequest} from '@/game/landChunks'
 import {createPlayerStatue} from '@/game/playerStatue'
-import {PLAYER_STATUE_NAME_MAX_LENGTH} from '@/game/playerStatueConfig'
-import type {MapItemResponse, Tile} from '@/game/types'
+import {PLAYER_STATUE_MIN_FOOTPRINT_SIZE, PLAYER_STATUE_NAME_MAX_LENGTH} from '@/game/playerStatueConfig'
+import type {MapItemResponse, MapObject, Tile} from '@/game/types'
 import {resolveApiErrorMessage} from '@/utils/apiErrors'
 import {uploadFile} from '@/utils/uploadFile'
 
@@ -20,6 +20,8 @@ interface UsePlayerStatueControllerOptions {
     hideHomeHoverCard: () => void
     hideLandHoverCard: () => void
     focusTile: (tile: Tile, center?: boolean) => void
+    focusMapObject: (object: MapObject, center?: boolean) => void
+    getMapObjects: () => MapObject[]
     refreshMapItems: (mapId: number, rect?: LandChunkRequest) => Promise<unknown>
     refreshClaimInventory: () => Promise<void>
     setPlayerStatueInventoryQuantity: (quantity: number) => void
@@ -121,6 +123,8 @@ export function usePlayerStatueController(options: UsePlayerStatueControllerOpti
                 await options.refreshClaimInventory()
             }
             await options.refreshMapItems(mapId, createPlayerStatueRefreshRect(response.item_data, tile))
+            const createdStatue = findCreatedPlayerStatueObject(options.getMapObjects(), response.item_data, tile)
+            if (createdStatue) options.focusMapObject(createdStatue, false)
             resetDialog()
             options.showToast('雕像已建立')
             options.requestDraw()
@@ -137,7 +141,7 @@ export function usePlayerStatueController(options: UsePlayerStatueControllerOpti
         if (uploadedStatueImage?.key === key) return uploadedStatueImage.url
 
         const uploadResult = await uploadFile(blob, {
-            filename: `player-statue-${Date.now()}.jpg`,
+            filename: `player-statue-${Date.now()}.${getStatueImageExtension(blob.type)}`,
         })
         const statueUrl = uploadResult.url?.trim()
         if (!statueUrl) throw new Error('图片上传响应缺少 url')
@@ -158,6 +162,13 @@ export function usePlayerStatueController(options: UsePlayerStatueControllerOpti
         resetDialog,
         confirm,
     }
+}
+
+function getStatueImageExtension(type: string) {
+    if (type === 'image/webp') return 'webp'
+    if (type === 'image/png') return 'png'
+
+    return 'bin'
 }
 
 async function createBlobCacheKey(blob: Blob) {
@@ -189,19 +200,38 @@ function toHexByte(byte: number) {
 }
 
 function createPlayerStatueRefreshRect(item: MapItemResponse | null | undefined, tile: Tile): LandChunkRequest {
-    if (item && item.width > 0 && item.height > 0) {
+    if (item) {
         return {
             x: item.x,
             y: item.y,
-            w: item.width,
-            h: item.height,
+            w: getPlayerStatueRefreshDimension(item.width),
+            h: getPlayerStatueRefreshDimension(item.height),
         }
     }
 
     return {
         x: tile.x,
         y: tile.y,
-        w: 1,
-        h: 1,
+        w: PLAYER_STATUE_MIN_FOOTPRINT_SIZE,
+        h: PLAYER_STATUE_MIN_FOOTPRINT_SIZE,
     }
+}
+
+function findCreatedPlayerStatueObject(
+    mapObjects: MapObject[],
+    item: MapItemResponse | null | undefined,
+    tile: Tile,
+) {
+    const x = item?.x ?? tile.x
+    const y = item?.y ?? tile.y
+
+    return mapObjects.find((object) => {
+        return object.type === 'player_statue' &&
+            object.x === x &&
+            object.y === y
+    }) ?? null
+}
+
+function getPlayerStatueRefreshDimension(value: number) {
+    return Math.max(PLAYER_STATUE_MIN_FOOTPRINT_SIZE, Number.isFinite(value) ? value : 0)
 }

@@ -11,16 +11,6 @@ interface StatueImageCacheEntry {
     status: StatueImageStatus
 }
 
-interface CircularStatueOptions {
-    centerX: number
-    centerY: number
-    image: CanvasImageSource | null
-    radius: number
-    shimmer: number
-    strokeColor: string
-    themeColor: string
-}
-
 const statueImageCache = new Map<string, StatueImageCacheEntry>()
 
 export function drawPlayerStatueObject(
@@ -34,8 +24,6 @@ export function drawPlayerStatueObject(
     const width = object.width * tileSize
     const height = object.height * tileSize
     const centerX = object.x * tileSize + width / 2
-    const centerY = object.y * tileSize + height / 2
-    const radius = Math.min(width, height) * 0.42
     const themeColor = resolveThemeColor(object.ownerData?.color, '#8f8a70')
     const strokeColor = getThemeStrokeColor(themeColor)
     const image = getPlayerStatueImage(object.playerStatueUrl, requestDraw)
@@ -44,14 +32,13 @@ export function drawPlayerStatueObject(
     context.save()
     context.lineCap = 'round'
     context.lineJoin = 'round'
-    drawCircularStatue(context, {
+    drawFreestandingStatue(context, object, image, {
         centerX,
-        centerY,
-        image,
-        radius,
+        height,
         shimmer,
         strokeColor,
         themeColor,
+        width,
     })
     context.restore()
 }
@@ -85,254 +72,118 @@ function getPlayerStatueImage(url: string | null | undefined, requestDraw: () =>
     return null
 }
 
-function drawCircularStatue(context: PixiDrawContext, options: CircularStatueOptions) {
-    const {centerX, centerY, image, radius, shimmer, strokeColor, themeColor} = options
-    const outlineColor = mixHexColor(strokeColor, '#3a3123', 0.58)
-    const stoneLight = mixHexColor(themeColor, '#f2ecdc', 0.78)
-    const stoneMid = mixHexColor(themeColor, '#c7b899', 0.5)
-    const stoneDark = mixHexColor(themeColor, '#837462', 0.2)
-    const innerRadius = radius * 0.74
-    const depthX = radius * 0.12
-    const depthY = radius * 0.14
-
-    drawCircularDepth(context, centerX, centerY, radius, depthX, depthY, outlineColor, stoneDark, themeColor)
-
-    const outerGradient = context.createRadialGradient(
-        centerX - radius * 0.32,
-        centerY - radius * 0.38,
-        radius * 0.12,
-        centerX,
-        centerY,
-        radius,
-    )
-    outerGradient.addColorStop(0, stoneLight)
-    outerGradient.addColorStop(0.62, stoneMid)
-    outerGradient.addColorStop(1, stoneDark)
-
-    context.fillStyle = outerGradient
-    context.strokeStyle = hexToRgba(outlineColor, 0.88)
-    context.lineWidth = Math.max(2, radius * 0.06)
-    context.beginPath()
-    context.arc(centerX, centerY, radius, 0, Math.PI * 2)
-    context.fill()
-    context.stroke()
-
-    context.strokeStyle = hexToRgba(outlineColor, 0.32)
-    context.lineWidth = Math.max(1.6, radius * 0.045)
-    context.beginPath()
-    context.arc(centerX, centerY, radius * 0.96, 0.05, 1.42)
-    context.stroke()
-
-    context.strokeStyle = hexToRgba('#fff8e6', 0.34 + shimmer)
-    context.lineWidth = Math.max(1.4, radius * 0.035)
-    context.beginPath()
-    context.arc(centerX, centerY, radius * 0.86, -2.7, -0.68)
-    context.stroke()
-
-    context.strokeStyle = hexToRgba(outlineColor, 0.26)
-    context.lineWidth = Math.max(1, radius * 0.025)
-    context.beginPath()
-    context.arc(centerX, centerY, innerRadius + radius * 0.09, 0, Math.PI * 2)
-    context.stroke()
-
-    drawCircularRelief(context, {
-        centerX,
-        centerY,
-        image,
-        radius: innerRadius,
-        shimmer,
-        strokeColor: outlineColor,
-        themeColor,
-    })
-
-    drawCircularMarks(context, centerX, centerY, radius, outlineColor, themeColor)
-}
-
-function drawCircularDepth(
+function drawFreestandingStatue(
     context: PixiDrawContext,
-    centerX: number,
-    centerY: number,
-    radius: number,
-    depthX: number,
-    depthY: number,
-    outlineColor: string,
-    sideColor: string,
-    themeColor: string,
-) {
-    const layerCount = 6
-    const sideLight = mixHexColor(themeColor, '#d5c29c', 0.28)
-    const sideDark = mixHexColor(outlineColor, '#4e4030', 0.62)
-
-    for (let index = layerCount; index >= 1; index -= 1) {
-        const ratio = index / layerCount
-        const layerX = centerX + depthX * ratio
-        const layerY = centerY + depthY * ratio
-        const layerGradient = context.createRadialGradient(
-            layerX - radius * 0.28,
-            layerY - radius * 0.34,
-            radius * 0.12,
-            layerX,
-            layerY,
-            radius,
-        )
-
-        layerGradient.addColorStop(0, sideLight)
-        layerGradient.addColorStop(0.58, sideColor)
-        layerGradient.addColorStop(1, sideDark)
-        context.fillStyle = layerGradient
-        context.strokeStyle = hexToRgba(outlineColor, 0.18 + ratio * 0.18)
-        context.lineWidth = Math.max(1, radius * 0.03)
-        context.beginPath()
-        context.arc(layerX, layerY, radius, 0, Math.PI * 2)
-        context.fill()
-        context.stroke()
-    }
-
-    context.strokeStyle = hexToRgba('#fff7df', 0.18)
-    context.lineWidth = Math.max(1, radius * 0.025)
-    context.beginPath()
-    context.arc(centerX + depthX * 0.36, centerY + depthY * 0.36, radius * 0.98, -2.68, -0.78)
-    context.stroke()
-
-    context.strokeStyle = hexToRgba(sideDark, 0.3)
-    context.lineWidth = Math.max(1.2, radius * 0.035)
-    context.beginPath()
-    context.arc(centerX + depthX, centerY + depthY, radius * 0.99, 0.16, 1.48)
-    context.stroke()
-}
-
-function drawCircularRelief(
-    context: PixiDrawContext,
+    object: MapObject,
+    image: CanvasImageSource | null,
     options: {
         centerX: number
-        centerY: number
-        image: CanvasImageSource | null
-        radius: number
+        height: number
+        shimmer: number
+        strokeColor: string
+        themeColor: string
+        width: number
+    },
+) {
+    const {centerX, height, shimmer, strokeColor, themeColor, width} = options
+    const drawWidth = width * 0.98
+    const drawHeight = height * 0.98
+    const drawSize = Math.min(drawWidth, drawHeight)
+    const groundY = object.y * tileSize + height - drawSize * 0.01
+    const drawLeft = centerX - drawWidth / 2
+    const drawTop = groundY - drawHeight
+    const shadowColor = mixHexColor(strokeColor, '#2d281f', 0.45)
+
+    context.fillStyle = hexToRgba(shadowColor, 0.18)
+    context.beginPath()
+    context.ellipse(centerX + drawWidth * 0.03, groundY - drawHeight * 0.035, drawWidth * 0.3, drawSize * 0.065, 0, 0, Math.PI * 2)
+    context.fill()
+
+    if (image) {
+        context.imageSmoothingEnabled = true
+        context.imageSmoothingQuality = 'high'
+        context.drawImage(image, drawLeft, drawTop, drawWidth, drawHeight)
+    } else {
+        context.save()
+        context.translate(drawLeft, drawTop)
+        context.scale(drawWidth / drawSize, drawHeight / drawSize)
+        drawPlaceholderStatue(context, 0, 0, drawSize, {
+            shimmer,
+            strokeColor,
+            themeColor,
+        })
+        context.restore()
+    }
+
+    context.fillStyle = hexToRgba(themeColor, 0.14)
+    context.beginPath()
+    context.ellipse(centerX, groundY - drawSize * 0.005, drawWidth * 0.23, drawSize * 0.03, 0, 0, Math.PI * 2)
+    context.fill()
+}
+
+function drawPlaceholderStatue(
+    context: PixiDrawContext,
+    left: number,
+    top: number,
+    size: number,
+    options: {
         shimmer: number
         strokeColor: string
         themeColor: string
     },
 ) {
-    const {centerX, centerY, image, radius, shimmer, strokeColor, themeColor} = options
-    const stoneTint = mixHexColor(themeColor, '#b4a588', 0.28)
+    const {strokeColor, themeColor} = options
+    const lightColor = mixHexColor(themeColor, '#f3ead7', 0.74)
+    const midColor = mixHexColor(themeColor, '#b9aa8b', 0.5)
+    const darkColor = mixHexColor(themeColor, '#6e6657', 0.32)
+    const centerX = left + size / 2
 
-    context.save()
+    context.fillStyle = hexToRgba(darkColor, 0.26)
     context.beginPath()
-    context.arc(centerX, centerY, radius, 0, Math.PI * 2)
-    context.clip()
-
-    context.fillStyle = mixHexColor(themeColor, '#e6dcc6', 0.72)
-    context.fillRect(centerX - radius, centerY - radius, radius * 2, radius * 2)
-
-    if (image) {
-        context.save()
-        context.globalAlpha = 0.78
-        drawStatueImageCover(context, image, centerX - radius, centerY - radius, radius * 2, radius * 2)
-        context.restore()
-    } else {
-        drawReliefFallback(context, centerX, centerY, radius, strokeColor, stoneTint)
-    }
-
-    const tintGradient = context.createRadialGradient(
-        centerX - radius * 0.34,
-        centerY - radius * 0.38,
-        radius * 0.1,
-        centerX,
-        centerY,
-        radius,
-    )
-    tintGradient.addColorStop(0, hexToRgba('#fffaf0', 0.28 + shimmer))
-    tintGradient.addColorStop(0.58, hexToRgba(stoneTint, image ? 0.2 : 0.1))
-    tintGradient.addColorStop(1, hexToRgba(strokeColor, 0.28))
-    context.fillStyle = tintGradient
-    context.fillRect(centerX - radius, centerY - radius, radius * 2, radius * 2)
-    context.restore()
-
-    context.strokeStyle = hexToRgba(strokeColor, 0.5)
-    context.lineWidth = Math.max(1.4, radius * 0.06)
-    context.beginPath()
-    context.arc(centerX, centerY, radius, 0, Math.PI * 2)
-    context.stroke()
-}
-
-function drawReliefFallback(
-    context: PixiDrawContext,
-    centerX: number,
-    centerY: number,
-    radius: number,
-    strokeColor: string,
-    stoneTint: string,
-) {
-    context.fillStyle = hexToRgba(stoneTint, 0.5)
-    context.beginPath()
-    context.ellipse(centerX, centerY - radius * 0.25, radius * 0.26, radius * 0.33, 0, 0, Math.PI * 2)
+    context.ellipse(centerX + size * 0.02, top + size * 0.87, size * 0.36, size * 0.075, 0, 0, Math.PI * 2)
     context.fill()
 
+    context.fillStyle = midColor
+    context.strokeStyle = hexToRgba(strokeColor, 0.58)
+    context.lineWidth = Math.max(1.2, size * 0.012)
     context.beginPath()
-    context.moveTo(centerX - radius * 0.38, centerY + radius * 0.42)
-    context.quadraticCurveTo(centerX, centerY + radius * 0.02, centerX + radius * 0.38, centerY + radius * 0.42)
-    context.quadraticCurveTo(centerX + radius * 0.2, centerY + radius * 0.62, centerX, centerY + radius * 0.62)
-    context.quadraticCurveTo(centerX - radius * 0.2, centerY + radius * 0.62, centerX - radius * 0.38, centerY + radius * 0.42)
+    context.moveTo(left + size * 0.31, top + size * 0.78)
+    context.lineTo(left + size * 0.69, top + size * 0.78)
+    context.lineTo(left + size * 0.75, top + size * 0.9)
+    context.quadraticCurveTo(centerX, top + size * 0.93, left + size * 0.25, top + size * 0.9)
+    context.closePath()
     context.fill()
-
-    context.strokeStyle = hexToRgba(strokeColor, 0.44)
-    context.lineWidth = Math.max(1.2, radius * 0.045)
-    context.beginPath()
-    context.moveTo(centerX - radius * 0.2, centerY + radius * 0.1)
-    context.quadraticCurveTo(centerX, centerY + radius * 0.22, centerX + radius * 0.2, centerY + radius * 0.1)
-    context.moveTo(centerX, centerY - radius * 0.47)
-    context.quadraticCurveTo(centerX - radius * 0.08, centerY - radius * 0.24, centerX, centerY - radius * 0.04)
     context.stroke()
-}
 
-function drawCircularMarks(
-    context: PixiDrawContext,
-    centerX: number,
-    centerY: number,
-    radius: number,
-    outlineColor: string,
-    themeColor: string,
-) {
-    context.fillStyle = hexToRgba(themeColor, 0.42)
+    context.fillStyle = lightColor
+    context.beginPath()
+    context.ellipse(centerX, top + size * 0.75, size * 0.29, size * 0.055, 0, 0, Math.PI * 2)
+    context.fill()
+    context.stroke()
 
-    for (let index = 0; index < 10; index += 1) {
-        const angle = -Math.PI * 0.86 + index * (Math.PI * 1.72 / 9)
-        const x = centerX + Math.cos(angle) * radius * 0.9
-        const y = centerY + Math.sin(angle) * radius * 0.9
+    context.fillStyle = mixHexColor(themeColor, '#d5cab1', 0.58)
+    context.beginPath()
+    context.moveTo(left + size * 0.27, top + size * 0.71)
+    context.bezierCurveTo(left + size * 0.3, top + size * 0.56, left + size * 0.4, top + size * 0.53, left + size * 0.41, top + size * 0.45)
+    context.bezierCurveTo(left + size * 0.32, top + size * 0.38, left + size * 0.35, top + size * 0.2, centerX, top + size * 0.19)
+    context.bezierCurveTo(left + size * 0.65, top + size * 0.2, left + size * 0.68, top + size * 0.38, left + size * 0.59, top + size * 0.45)
+    context.bezierCurveTo(left + size * 0.6, top + size * 0.53, left + size * 0.7, top + size * 0.56, left + size * 0.73, top + size * 0.71)
+    context.quadraticCurveTo(left + size * 0.7, top + size * 0.8, centerX, top + size * 0.81)
+    context.quadraticCurveTo(left + size * 0.3, top + size * 0.8, left + size * 0.27, top + size * 0.71)
+    context.closePath()
+    context.fill()
+    context.stroke()
 
+    context.strokeStyle = hexToRgba(strokeColor, 0.14)
+    context.lineWidth = Math.max(1, size * 0.008)
+    for (let index = 0; index < 5; index += 1) {
+        const markX = left + size * (0.38 + (index % 2) * 0.14)
+        const markY = top + size * (0.3 + index * 0.085)
         context.beginPath()
-        context.arc(x, y, Math.max(1.1, radius * 0.035), 0, Math.PI * 2)
-        context.fill()
+        context.moveTo(markX, markY)
+        context.lineTo(markX + size * 0.07, markY + size * (index % 2 === 0 ? 0.014 : -0.012))
+        context.stroke()
     }
-
-    context.strokeStyle = hexToRgba(outlineColor, 0.18)
-    context.lineWidth = Math.max(1, radius * 0.024)
-    context.beginPath()
-    context.arc(centerX, centerY, radius * 0.55, 0.18, Math.PI - 0.18)
-    context.stroke()
-}
-
-function drawStatueImageCover(
-    context: PixiDrawContext,
-    image: CanvasImageSource,
-    left: number,
-    top: number,
-    width: number,
-    height: number,
-) {
-    const sourceWidth = getImageSourceWidth(image)
-    const sourceHeight = getImageSourceHeight(image)
-    if (sourceWidth <= 0 || sourceHeight <= 0) return
-
-    const scale = Math.max(width / sourceWidth, height / sourceHeight)
-    const drawWidth = sourceWidth * scale
-    const drawHeight = sourceHeight * scale
-    const drawLeft = left + (width - drawWidth) / 2
-    const drawTop = top + (height - drawHeight) / 2
-
-    context.imageSmoothingEnabled = true
-    context.imageSmoothingQuality = 'high'
-    context.drawImage(image, drawLeft, drawTop, drawWidth, drawHeight)
 }
 
 function createHighResolutionStatueImage(image: HTMLImageElement) {
@@ -360,26 +211,4 @@ function createHighResolutionStatueImage(image: HTMLImageElement) {
     }
 
     return canvas
-}
-
-function getImageSourceWidth(image: CanvasImageSource) {
-    if (image instanceof HTMLImageElement) return image.naturalWidth || image.width
-    if (image instanceof HTMLVideoElement) return image.videoWidth
-    if (typeof VideoFrame !== 'undefined' && image instanceof VideoFrame) return image.displayWidth
-    if (image instanceof SVGImageElement) return image.width.baseVal.value
-    if (image instanceof HTMLCanvasElement || image instanceof ImageBitmap) return image.width
-    if (typeof OffscreenCanvas !== 'undefined' && image instanceof OffscreenCanvas) return image.width
-
-    return 0
-}
-
-function getImageSourceHeight(image: CanvasImageSource) {
-    if (image instanceof HTMLImageElement) return image.naturalHeight || image.height
-    if (image instanceof HTMLVideoElement) return image.videoHeight
-    if (typeof VideoFrame !== 'undefined' && image instanceof VideoFrame) return image.displayHeight
-    if (image instanceof SVGImageElement) return image.height.baseVal.value
-    if (image instanceof HTMLCanvasElement || image instanceof ImageBitmap) return image.height
-    if (typeof OffscreenCanvas !== 'undefined' && image instanceof OffscreenCanvas) return image.height
-
-    return 0
 }
