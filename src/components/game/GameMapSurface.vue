@@ -189,7 +189,7 @@ const statueHoverDescription = computed(() => {
   const owner = ownerName.value?.trim() || '未知玩家'
   const createdAt = createdAtString.value || '时间未知'
 
-  return `${owner} · 建立于 ${createdAt}`
+  return `${owner} · ${createdAt}`
 })
 const hoverCardStyle = computed(() => {
   const margin = 12
