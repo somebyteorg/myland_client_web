@@ -17,12 +17,14 @@ import type {MapObject, Tile} from '@/game/types'
 
 type TileLookup = (x: number, y: number) => Tile | null
 type OccupiedRect = Pick<MapObject, 'x' | 'y' | 'width' | 'height'>
+type TileRect = Pick<MapObject, 'x' | 'y' | 'width' | 'height'>
 
 interface UseTileRuleSetOptions {
     hasOwnHomeOnCurrentMap: ComputedRef<boolean>
     landPlacementMode: ComputedRef<LandPlacementMode | null>
     canSubmitClaim: ComputedRef<boolean>
     tileAt: () => TileLookup
+    getOwnHomeRect: () => TileRect | null
     getMapObjects: () => MapObject[]
     getOccupiedRects: () => OccupiedRect[]
     isRiverTile: (x: number, y: number) => boolean
@@ -47,6 +49,7 @@ export function useTileRuleSet(options: UseTileRuleSetOptions) {
     function canClaimDeedTile(tile: Tile) {
         return canClaimDeedTileRule(tile, {
             hasOwnHome: options.hasOwnHomeOnCurrentMap.value,
+            ownHomeRect: options.getOwnHomeRect(),
             tileAt: options.tileAt(),
             occupiedRects: options.getOccupiedRects(),
             mapObjects: options.getMapObjects(),

@@ -165,7 +165,7 @@ const claimMessage = computed(() => {
   const y = tile?.y ?? '--'
 
   if (props.claimDialog.mode === 'deed') {
-    return `使用 1 张地契，将 (${x}, ${y}) 这块相邻空地纳入你的领地？`
+    return `使用 1 张地契，将 (${x}, ${y}) 这块空地纳入你的领地？`
   }
 
   return `使用 1 枚开拓令，将 (${x}, ${y}) 起始的 2x2 空地设为初始家园？`

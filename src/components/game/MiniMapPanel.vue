@@ -107,7 +107,7 @@ function showLocatePlayerTooltip(event: MouseEvent | FocusEvent) {
 
 function showLocateClaimTooltip(event: MouseEvent | FocusEvent) {
   const description = props.placementMode === 'deed'
-      ? '将视角移动到可扩张的相邻空地'
+      ? '将视角移动到可扩张空地'
       : '将视角移动到可开拓的空白区域'
 
   showTooltip(locateClaimTitle.value, description, event)

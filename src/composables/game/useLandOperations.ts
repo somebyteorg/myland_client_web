@@ -135,7 +135,7 @@ export function useLandOperations(options: UseLandOperationsOptions) {
     async function grantDeedLand(tile: Tile) {
         const playerId = options.getPlayerId()
         if (!playerId || !options.canClaimDeedTile(tile)) {
-            setClaimErrorMessage('当前地块不可扩张，请选择相邻空地')
+            setClaimErrorMessage('当前地块不可扩张，请选择家园周围或邻近足够自有土地的空地')
             options.claimDialog.submitting = false
             return
         }
@@ -175,7 +175,7 @@ export function useLandOperations(options: UseLandOperationsOptions) {
             void syncGrantedDeedLand(tile)
         } catch (error) {
             console.error(error)
-            const apiError = await resolveApiError(error, '扩张失败，请换一块相邻空地再试')
+            const apiError = await resolveApiError(error, '扩张失败，请换一块可扩张空地再试')
             setClaimErrorMessage(apiError.message)
             if (apiError.isValidationError) options.onError(apiError.message)
             options.claimDialog.submitting = false

@@ -34,7 +34,7 @@ export function useClaimBanner(options: UseClaimBannerOptions) {
         if (options.claimInventoryLoading.value) return '正在读取开拓令和地契'
         if (options.landPlacementMode.value === 'pioneer' && options.claimTokensAvailable.value <= 0) return '没有可用开拓令，无法设置家园'
         if (options.landPlacementMode.value === 'deed' && options.deedInventoryAvailable.value <= 0) return '没有可用地契，无法扩张领地'
-        if (options.landPlacementMode.value === 'deed') return '移动地块选择相邻空地，点击后确认扩张'
+        if (options.landPlacementMode.value === 'deed') return '选择家园周围，或九宫格内有 2 块以上自有土地的空地'
 
         return '移动房子选择 2x2 空地，点击后确认开拓'
     })

@@ -603,6 +603,7 @@ const {
   landPlacementMode,
   canSubmitClaim,
   tileAt: () => tileAt,
+  getOwnHomeRect: () => homeAnchor.value,
   getMapObjects: () => mapObjects,
   getOccupiedRects: () => occupiedMapRects,
   isRiverTile,

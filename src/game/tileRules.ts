@@ -80,10 +80,40 @@ export function isAdjacentToOwner(tile: Tile, tileAt: TileLookup, ownerType: Til
     return getNeighbors(tile, tileAt).some((neighbor) => neighbor.ownerType === ownerType)
 }
 
+export function isAroundRect(tile: Tile, rect: Pick<TileRect, 'x' | 'y' | 'width' | 'height'> | null | undefined) {
+    if (!rect || rect.width <= 0 || rect.height <= 0) return false
+
+    const inExpandedRect =
+        tile.x >= rect.x - 1 &&
+        tile.x < rect.x + rect.width + 1 &&
+        tile.y >= rect.y - 1 &&
+        tile.y < rect.y + rect.height + 1
+    const inRect =
+        tile.x >= rect.x &&
+        tile.x < rect.x + rect.width &&
+        tile.y >= rect.y &&
+        tile.y < rect.y + rect.height
+
+    return inExpandedRect && !inRect
+}
+
+export function countOwnerTilesInGrid(tile: Tile, tileAt: TileLookup, ownerType: Tile['ownerType']) {
+    let count = 0
+
+    for (let y = tile.y - 1; y <= tile.y + 1; y += 1) {
+        for (let x = tile.x - 1; x <= tile.x + 1; x += 1) {
+            if (tileAt(x, y)?.ownerType === ownerType) count += 1
+        }
+    }
+
+    return count
+}
+
 export function canClaimDeedTile(
     tile: Tile,
     options: {
         hasOwnHome: boolean
+        ownHomeRect?: Pick<TileRect, 'x' | 'y' | 'width' | 'height'> | null
         tileAt: TileLookup
         occupiedRects: Array<Pick<TileRect, 'x' | 'y' | 'width' | 'height'>>
         mapObjects: TileRect[]
@@ -91,10 +121,10 @@ export function canClaimDeedTile(
     },
 ) {
     if (!options.hasOwnHome) return false
-    if (!isAdjacentToOwner(tile, options.tileAt, 'player')) return false
     if (isMapEdgeTile(tile, options.tileAt)) return false
     if (tile.terrain !== 'grass' || tile.ownerType !== 'none' || options.isRiverTile(tile.x, tile.y)) return false
     if (isTileOccupiedByRect(tile, options.occupiedRects)) return false
+    if (!isAroundRect(tile, options.ownHomeRect) && countOwnerTilesInGrid(tile, options.tileAt, 'player') < 2) return false
 
     return objectsAtTile(tile, options.mapObjects).length === 0
 }
