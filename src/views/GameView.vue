@@ -34,6 +34,7 @@
         :debug-toggle-enabled="renderDebugPanelAvailable"
         :time="gameTime"
         :time-loading="timeLoading"
+        @inventory-updated="refreshClaimInventory"
         @locate-chronicle-tile="locateChronicleTile"
         @locate-player-home="locatePlayerHomeById"
         @player-card-resize="updatePlayerCardHeight"

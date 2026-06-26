@@ -8,6 +8,7 @@
       :land-placement-mode="landPlacementMode"
       :loading="playerLoading"
       :player="player"
+      @inventory-updated="$emit('inventoryUpdated')"
       @locate-chronicle-tile="$emit('locateChronicleTile', $event)"
       @resize="$emit('playerCardResize', $event)"
       @use-deed="$emit('useDeed')"
@@ -77,6 +78,7 @@ defineProps<{
 }>()
 
 defineEmits<{
+  inventoryUpdated: []
   locateChronicleTile: [location: PlayerChronicleLocation]
   locatePlayerHome: [playerId: string]
   playerCardResize: [height: number]

@@ -2,7 +2,7 @@
   <section
       ref="cardRef"
       class="top-player-card"
-      :class="{ 'has-chronicle-open': showChronicle, 'has-inventory-open': showInventory, 'has-shop-open': showShop }"
+      :class="{ 'has-chronicle-open': showChronicle, 'has-craft-open': showCraft, 'has-inventory-open': showInventory, 'has-shop-open': showShop }"
       :aria-busy="loading"
   >
     <div class="player-card-actions">
@@ -25,6 +25,27 @@
           <path d="M9 8.1a3 3 0 0 1 6 0"/>
           <path d="M7.4 12h9.2"/>
           <path d="M10.1 15.1h3.8"/>
+        </svg>
+      </button>
+      <button
+          class="player-card-action-button player-craft-toggle"
+          type="button"
+          :class="{ 'is-active': showCraft }"
+          :aria-expanded="showCraft"
+          aria-label="打开制作"
+          :disabled="!playerId"
+          @click="toggleCraft"
+          @focus="showCraftTooltip"
+          @blur="hideTooltip"
+          @mouseenter="showCraftTooltip"
+          @mousemove="moveTooltip"
+          @mouseleave="hideTooltip"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M14.8 5.2 19 9.4"/>
+          <path d="M13.3 6.7 8.6 11.4"/>
+          <path d="M6.5 13.5 4.2 19.8l6.3-2.3 7.9-7.9-4-4Z"/>
+          <path d="M7.2 16.8 9 18.6"/>
         </svg>
       </button>
       <button
@@ -223,6 +244,14 @@
         @locate="$emit('locateChronicleTile', $event)"
     />
 
+    <GameToolCraftDialog
+        v-if="showCraft && playerId"
+        :item-catalog="itemCatalog"
+        :player-id="playerId"
+        @close="showCraft = false"
+        @inventory-updated="$emit('inventoryUpdated')"
+    />
+
     <GameInventoryDialog
         v-if="showInventory && playerId"
         :item-catalog="itemCatalog"
@@ -258,6 +287,7 @@ import {computed, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import GameInventoryDialog from '@/components/game/GameInventoryDialog.vue'
 import GameShopDialog from '@/components/game/GameShopDialog.vue'
 import GameTooltip from '@/components/game/GameTooltip.vue'
+import GameToolCraftDialog from '@/components/game/GameToolCraftDialog.vue'
 import PlayerChroniclePanel from '@/components/game/PlayerChroniclePanel.vue'
 import {useFloatingTooltip} from '@/composables/useFloatingTooltip'
 import type {PlayerChronicleLocation, PlayerInfo} from '@/game/homeTypes'
@@ -300,6 +330,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
+  inventoryUpdated: []
   locateChronicleTile: [location: PlayerChronicleLocation]
   resize: [height: number]
   useDeed: []
@@ -309,6 +340,7 @@ const emit = defineEmits<{
 const {tooltip, showTooltip, moveTooltip, hideTooltip, setTooltipElement} = useFloatingTooltip()
 const cardRef = ref<HTMLElement | null>(null)
 const showChronicle = ref(false)
+const showCraft = ref(false)
 const showInventory = ref(false)
 const showShop = ref(false)
 let cardResizeObserver: ResizeObserver | null = null
@@ -443,6 +475,7 @@ const avatarUrl = computed(() => {
 
 watch(playerId, () => {
   showChronicle.value = false
+  showCraft.value = false
   showInventory.value = false
   showShop.value = false
 })
@@ -502,14 +535,24 @@ function handleUseDeed() {
 
 function toggleChronicle() {
   hideTooltip()
+  showCraft.value = false
   showInventory.value = false
   showShop.value = false
   showChronicle.value = !showChronicle.value
 }
 
+function toggleCraft() {
+  hideTooltip()
+  showChronicle.value = false
+  showInventory.value = false
+  showShop.value = false
+  showCraft.value = !showCraft.value
+}
+
 function toggleInventory() {
   hideTooltip()
   showChronicle.value = false
+  showCraft.value = false
   showShop.value = false
   showInventory.value = !showInventory.value
 }
@@ -517,6 +560,7 @@ function toggleInventory() {
 function toggleShop() {
   hideTooltip()
   showChronicle.value = false
+  showCraft.value = false
   showInventory.value = false
   showShop.value = !showShop.value
 }
@@ -543,6 +587,10 @@ function showStatTooltip(name: string, event: MouseEvent | FocusEvent) {
 
 function showChronicleTooltip(event: MouseEvent | FocusEvent) {
   showTooltip('编年史', '', event)
+}
+
+function showCraftTooltip(event: MouseEvent | FocusEvent) {
+  showTooltip('制作', '', event)
 }
 
 function showInventoryTooltip(event: MouseEvent | FocusEvent) {
@@ -592,11 +640,13 @@ function emitCardHeight() {
 .top-player-card:hover,
 .top-player-card:focus-within,
 .top-player-card.has-chronicle-open,
+.top-player-card.has-craft-open,
 .top-player-card.has-inventory-open,
 .top-player-card.has-shop-open {
   z-index: 88;
 }
 
+.top-player-card.has-craft-open,
 .top-player-card.has-inventory-open,
 .top-player-card.has-shop-open {
   z-index: 96;
@@ -712,7 +762,7 @@ function emitCardHeight() {
   gap: 8px;
   min-width: 0;
   box-sizing: border-box;
-  padding-right: 104px;
+  padding-right: 138px;
   line-height: 1;
 }
 
