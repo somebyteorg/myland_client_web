@@ -36,7 +36,7 @@ export async function loadMapItems(mapId: number = MAP_FILE_ID_NAMELESS, rect?: 
 }
 
 export async function loadMapPlayerHome(playerId: string, mapId: number = MAP_FILE_ID_NAMELESS) {
-    return api.get(`api/map/${encodeURIComponent(String(mapId))}/plyaer/${encodeURIComponent(playerId)}/home`)
+    return api.get(`api/map/${encodeURIComponent(String(mapId))}/player/${encodeURIComponent(playerId)}/home`)
         .json<MapPlayerHomeItem[]>()
 }
 
