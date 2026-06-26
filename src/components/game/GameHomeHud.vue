@@ -56,6 +56,11 @@ defineProps<{
     playerStatueToken: number
     grainCurrency: number
     stoneCurrency: number
+    woodCurrency: number
+    quarryCurrency: number
+    ironCurrency: number
+    herbCurrency: number
+    fiberCurrency: number
   }
   claimLoading: boolean
   claimMode: boolean
@@ -102,13 +107,13 @@ defineEmits<{
   .top-right-hud {
     top: 12px;
     right: 12px;
-    max-width: calc(100vw - 336px);
+    max-width: calc(100vw - 360px);
   }
 }
 
 @media (max-width: 640px) {
   .top-right-hud {
-    max-width: max(92px, calc(100vw - 264px));
+    max-width: max(92px, calc(100vw - 276px));
     gap: 5px;
   }
 }

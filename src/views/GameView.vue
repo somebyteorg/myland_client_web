@@ -1364,6 +1364,7 @@ function updatePlantGrowth() {
 .game-view {
   --game-player-card-top: 18px;
   --game-left-control-gap: 12px;
+  --game-left-panel-width: min(370px, calc(100vw - 36px));
   --game-left-control-top: calc(var(--game-player-card-top) + var(--game-player-card-height, 76px) + var(--game-left-control-gap));
 }
 
@@ -1534,6 +1535,7 @@ function updatePlantGrowth() {
   .game-view {
     --game-player-card-top: 12px;
     --game-left-control-gap: 10px;
+    --game-left-panel-width: min(370px, calc(100vw - 24px));
   }
 
   .land-placement-toggle {
@@ -1561,6 +1563,7 @@ function updatePlantGrowth() {
 @media (max-width: 640px) {
   .game-view {
     --game-left-control-gap: 8px;
+    --game-left-panel-width: min(370px, calc(100vw - 24px));
   }
 
   .land-placement-toggle {

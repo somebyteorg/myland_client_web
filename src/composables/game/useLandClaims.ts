@@ -3,8 +3,13 @@ import type {ComputedRef} from 'vue'
 import api from '@/utils/ky'
 import {resolveApiError} from '@/utils/apiErrors'
 import {
+    ITEM_ID_CURRENCY_FIBER,
     ITEM_ID_CURRENCY_GRAIN,
+    ITEM_ID_CURRENCY_HERB,
+    ITEM_ID_CURRENCY_IRON,
+    ITEM_ID_CURRENCY_QUARRY,
     ITEM_ID_CURRENCY_STONE,
+    ITEM_ID_CURRENCY_WOOD,
     ITEM_ID_PROP_LAND_DEED,
     ITEM_ID_PROP_LAND_GRANT,
     ITEM_ID_PROP_PLAYER_STATUE,
@@ -26,6 +31,16 @@ interface UseLandClaimsOptions {
     onError: (message: string) => void
 }
 
+const currencyInventoryEntries = [
+    [ITEM_ID_CURRENCY_GRAIN, 'grainCurrency'],
+    [ITEM_ID_CURRENCY_STONE, 'stoneCurrency'],
+    [ITEM_ID_CURRENCY_WOOD, 'woodCurrency'],
+    [ITEM_ID_CURRENCY_QUARRY, 'quarryCurrency'],
+    [ITEM_ID_CURRENCY_IRON, 'ironCurrency'],
+    [ITEM_ID_CURRENCY_HERB, 'herbCurrency'],
+    [ITEM_ID_CURRENCY_FIBER, 'fiberCurrency'],
+] as const
+
 export function useLandClaims(options: UseLandClaimsOptions) {
     const pioneerGuideDialog = reactive({
         visible: false,
@@ -37,6 +52,11 @@ export function useLandClaims(options: UseLandClaimsOptions) {
         playerStatueToken: 0,
         grainCurrency: 0,
         stoneCurrency: 0,
+        woodCurrency: 0,
+        quarryCurrency: 0,
+        ironCurrency: 0,
+        herbCurrency: 0,
+        fiberCurrency: 0,
     })
     const seedInventory = reactive<Record<number, number>>({})
     const claimItemInfo = reactive({
@@ -117,8 +137,7 @@ export function useLandClaims(options: UseLandClaimsOptions) {
         claimInventory.pioneerToken = 0
         claimInventory.landDeed = 0
         claimInventory.playerStatueToken = 0
-        claimInventory.grainCurrency = 0
-        claimInventory.stoneCurrency = 0
+        resetCurrencyInventory()
         resetSeedInventory()
         claimInventoryLoading.value = false
         claimMessage.value = ''
@@ -190,8 +209,7 @@ export function useLandClaims(options: UseLandClaimsOptions) {
             claimInventory.pioneerToken = 0
             claimInventory.landDeed = 0
             claimInventory.playerStatueToken = 0
-            claimInventory.grainCurrency = 0
-            claimInventory.stoneCurrency = 0
+            resetCurrencyInventory()
             resetSeedInventory()
             return
         }
@@ -200,8 +218,7 @@ export function useLandClaims(options: UseLandClaimsOptions) {
         claimInventory.pioneerToken = 0
         claimInventory.landDeed = 0
         claimInventory.playerStatueToken = 0
-        claimInventory.grainCurrency = 0
-        claimInventory.stoneCurrency = 0
+        resetCurrencyInventory()
         resetSeedInventory(seedItemIds)
         if (itemIds.length === 0) return
 
@@ -218,8 +235,9 @@ export function useLandClaims(options: UseLandClaimsOptions) {
             claimInventory.pioneerToken = itemIds.includes(ITEM_ID_PROP_LAND_GRANT) ? getInventoryQuantity(data, ITEM_ID_PROP_LAND_GRANT) : 0
             claimInventory.landDeed = itemIds.includes(ITEM_ID_PROP_LAND_DEED) ? getInventoryQuantity(data, ITEM_ID_PROP_LAND_DEED) : 0
             claimInventory.playerStatueToken = getInventoryQuantity(data, ITEM_ID_PROP_PLAYER_STATUE)
-            claimInventory.grainCurrency = getInventoryQuantity(data, ITEM_ID_CURRENCY_GRAIN)
-            claimInventory.stoneCurrency = getInventoryQuantity(data, ITEM_ID_CURRENCY_STONE)
+            for (const [itemId, key] of currencyInventoryEntries) {
+                claimInventory[key] = getInventoryQuantity(data, itemId)
+            }
             for (const itemId of seedItemIds) {
                 seedInventory[itemId] = getInventoryQuantity(data, itemId)
             }
@@ -230,8 +248,7 @@ export function useLandClaims(options: UseLandClaimsOptions) {
             claimInventory.pioneerToken = 0
             claimInventory.landDeed = 0
             claimInventory.playerStatueToken = 0
-            claimInventory.grainCurrency = 0
-            claimInventory.stoneCurrency = 0
+            resetCurrencyInventory()
             resetSeedInventory(seedItemIds)
             claimMessageTone.value = 'error'
             claimMessage.value = '道具读取失败，请稍后再试'
@@ -253,8 +270,7 @@ export function useLandClaims(options: UseLandClaimsOptions) {
     function getTrackedInventoryItemIds(seedItemIds: number[], extraItemIds: number[] = []) {
         const itemIds = [
             ...seedItemIds,
-            ITEM_ID_CURRENCY_GRAIN,
-            ITEM_ID_CURRENCY_STONE,
+            ...currencyInventoryEntries.map(([itemId]) => itemId),
             ITEM_ID_PROP_PLAYER_STATUE,
             ...extraItemIds
                 .map((itemId) => Number(itemId))
@@ -296,14 +312,16 @@ export function useLandClaims(options: UseLandClaimsOptions) {
 
     function addCurrencyQuantity(itemId: number, quantity: number) {
         const nextQuantity = Math.max(0, Number(quantity) || 0)
+        const entry = currencyInventoryEntries.find(([currencyItemId]) => currencyItemId === itemId)
 
-        if (itemId === ITEM_ID_CURRENCY_GRAIN) {
-            claimInventory.grainCurrency += nextQuantity
-            return
-        }
+        if (!entry) return
 
-        if (itemId === ITEM_ID_CURRENCY_STONE) {
-            claimInventory.stoneCurrency += nextQuantity
+        claimInventory[entry[1]] += nextQuantity
+    }
+
+    function resetCurrencyInventory() {
+        for (const [, key] of currencyInventoryEntries) {
+            claimInventory[key] = 0
         }
     }
 

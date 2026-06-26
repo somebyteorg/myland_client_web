@@ -430,7 +430,7 @@ function formatMessageContent(message: ChatMessage) {
   position: absolute;
   left: 0;
   bottom: 34px;
-  width: min(320px, calc(100vw - 36px));
+  width: var(--game-left-panel-width, min(370px, calc(100vw - 36px)));
   height: 12px;
   content: '';
 }
@@ -549,7 +549,8 @@ function formatMessageContent(message: ChatMessage) {
   left: 0;
   bottom: calc(100% + 10px);
   display: grid;
-  width: min(320px, calc(100vw - 36px));
+  box-sizing: border-box;
+  width: var(--game-left-panel-width, min(370px, calc(100vw - 36px)));
   height: min(430px, calc(100vh - 104px));
   grid-template-rows: auto minmax(0, 1fr) auto;
   overflow: hidden;
@@ -956,25 +957,9 @@ function formatMessageContent(message: ChatMessage) {
     left: 12px;
     bottom: 12px;
   }
-
-  .game-chat-window {
-    width: min(300px, calc(100vw - 24px));
-  }
-
-  .game-chat-panel.is-open::before {
-    width: min(300px, calc(100vw - 24px));
-  }
 }
 
 @media (max-width: 640px) {
-  .game-chat-window {
-    width: min(228px, calc(100vw - 120px));
-  }
-
-  .game-chat-panel.is-open::before {
-    width: min(228px, calc(100vw - 120px));
-  }
-
   .game-chat-window {
     height: min(390px, calc(100vh - 88px));
   }

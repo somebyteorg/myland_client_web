@@ -76,69 +76,54 @@
       </div>
 
       <div class="player-stats">
-        <span class="player-stat" :aria-label="`声望 ${reputationLabel}`">
+        <div class="player-stats-primary">
           <span
-              class="player-stat-icon"
+              v-for="stat in primaryPlayerStats"
+              :key="stat.key"
+              class="player-stat player-stat-primary"
+              :class="`is-${stat.key}`"
+              :aria-label="`${stat.label} ${stat.value}`"
               tabindex="0"
-              aria-label="声望"
-              @focus="showStatTooltip('声望', $event)"
+              @focus="showStatTooltip(stat.label, $event)"
               @blur="hideTooltip"
-              @mouseenter="showStatTooltip('声望', $event)"
+              @mouseenter="showStatTooltip(stat.label, $event)"
               @mousemove="moveTooltip"
               @mouseleave="hideTooltip"
           >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M12 5.1 14.6 7.3 17.9 7.8 16.4 10.6 16.9 13.8 12 11.8 7.1 13.8 7.6 10.6 6.1 7.8 9.4 7.3Z"/>
-              <path d="M9.1 12.3 7.8 19l4.2-2.3 4.2 2.3-1.3-6.7"/>
-              <path d="M12 6.7 12.8 8.1 14.4 8.4 13.3 9.5 13.5 11.1 12 10.4 10.5 11.1 10.7 9.5 9.6 8.4 11.2 8.1Z"/>
-            </svg>
+            <span class="player-stat-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path v-for="path in stat.iconPaths" :key="path" :d="path"/>
+              </svg>
+            </span>
+            <span class="player-stat-label">{{ stat.label }}</span>
+            <b class="player-stat-value">{{ stat.value }}</b>
           </span>
-          <b class="player-stat-value">{{ reputationLabel }}</b>
-        </span>
-        <span class="player-stat" :aria-label="`灵石 ${stoneLabel}`">
+        </div>
+        <div
+            v-if="secondaryCurrencyStats.length > 0"
+            class="player-stats-secondary"
+        >
           <span
-              class="player-stat-icon"
+              v-for="stat in secondaryCurrencyStats"
+              :key="stat.key"
+              class="player-stat player-stat-secondary"
+              :class="`is-${stat.key}`"
+              :aria-label="`${stat.label} ${stat.value}`"
               tabindex="0"
-              aria-label="灵石"
-              @focus="showStatTooltip('灵石', $event)"
+              @focus="showStatTooltip(stat.label, $event)"
               @blur="hideTooltip"
-              @mouseenter="showStatTooltip('灵石', $event)"
+              @mouseenter="showStatTooltip(stat.label, $event)"
               @mousemove="moveTooltip"
               @mouseleave="hideTooltip"
           >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M12 4.7 16.9 7.5 18.1 11.9 12 19.3 5.9 11.9 7.1 7.5Z"/>
-              <path d="M7.1 7.5h9.8"/>
-              <path d="M12 4.7 9.5 7.5 12 19.3 14.5 7.5Z"/>
-              <path d="M9.5 7.5 8.1 11.9h7.8l-1.4-4.4"/>
-            </svg>
+            <span class="player-stat-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path v-for="path in stat.iconPaths" :key="path" :d="path"/>
+              </svg>
+            </span>
+            <b class="player-stat-value">{{ stat.value }}</b>
           </span>
-          <b class="player-stat-value">{{ stoneLabel }}</b>
-        </span>
-        <span class="player-stat" :aria-label="`粮食 ${grainLabel}`">
-          <span
-              class="player-stat-icon"
-              tabindex="0"
-              aria-label="粮食"
-              @focus="showStatTooltip('粮食', $event)"
-              @blur="hideTooltip"
-              @mouseenter="showStatTooltip('粮食', $event)"
-              @mousemove="moveTooltip"
-              @mouseleave="hideTooltip"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M12 4.4v15.2"/>
-              <path d="M12 7c-1.9.2-3.5 1.2-4.7 3"/>
-              <path d="M12 9.1c-2 .2-3.6 1.3-4.8 3.1"/>
-              <path d="M12 11.4c-1.6.2-2.9 1-3.8 2.4"/>
-              <path d="M12 7c1.9.2 3.5 1.2 4.7 3"/>
-              <path d="M12 9.1c2 .2 3.6 1.3 4.8 3.1"/>
-              <path d="M12 11.4c1.6.2 2.9 1 3.8 2.4"/>
-              <path d="M9.5 17.2h5"/>
-            </svg>
-          </span>
-          <b class="player-stat-value">{{ grainLabel }}</b>
-        </span>
+        </div>
       </div>
       <div v-if="claimMode" class="player-claim-items" :aria-busy="claimLoading">
         <button
@@ -269,6 +254,11 @@ const props = defineProps<{
     playerStatueToken: number
     grainCurrency: number
     stoneCurrency: number
+    woodCurrency: number
+    quarryCurrency: number
+    ironCurrency: number
+    herbCurrency: number
+    fiberCurrency: number
   }
   claimLoading: boolean
   claimMode: boolean
@@ -292,6 +282,70 @@ const showShop = ref(false)
 let cardResizeObserver: ResizeObserver | null = null
 let lastCardHeight = 0
 
+const statIconPaths = {
+  reputation: [
+    'M12 5.1 14.6 7.3 17.9 7.8 16.4 10.6 16.9 13.8 12 11.8 7.1 13.8 7.6 10.6 6.1 7.8 9.4 7.3Z',
+    'M9.1 12.3 7.8 19l4.2-2.3 4.2 2.3-1.3-6.7',
+    'M12 6.7 12.8 8.1 14.4 8.4 13.3 9.5 13.5 11.1 12 10.4 10.5 11.1 10.7 9.5 9.6 8.4 11.2 8.1Z',
+  ],
+  stone: [
+    'M12 4.7 16.9 7.5 18.1 11.9 12 19.3 5.9 11.9 7.1 7.5Z',
+    'M7.1 7.5h9.8',
+    'M12 4.7 9.5 7.5 12 19.3 14.5 7.5Z',
+    'M9.5 7.5 8.1 11.9h7.8l-1.4-4.4',
+  ],
+  grain: [
+    'M12 4.4v15.2',
+    'M12 7c-1.9.2-3.5 1.2-4.7 3',
+    'M12 9.1c-2 .2-3.6 1.3-4.8 3.1',
+    'M12 11.4c-1.6.2-2.9 1-3.8 2.4',
+    'M12 7c1.9.2 3.5 1.2 4.7 3',
+    'M12 9.1c2 .2 3.6 1.3 4.8 3.1',
+    'M12 11.4c1.6.2 2.9 1 3.8 2.4',
+    'M9.5 17.2h5',
+  ],
+  wood: [
+    'M6.7 15.3h8.9a3 3 0 0 0 0-6H6.7a3 3 0 0 0 0 6Z',
+    'M8.1 9.3a3 3 0 0 1 0 6',
+    'M5.7 12.3h8.8',
+    'M16.8 8.1 19 5.9',
+    'M17.6 10.2l3-1.2',
+  ],
+  quarry: [
+    'M7 18.2 4.7 13l3.4-4.2 5.2 1.3 1.5 5.8-3.5 2.3Z',
+    'M13.3 10.1 16.2 6l4.1 3.4-.9 5.1-4.6 1.4',
+    'M8.1 8.8 10.4 13l-3.4 5.2',
+    'M16.2 6l-.7 5.3 3.9 3.2',
+  ],
+  iron: [
+    'M8.2 18.5 4.9 12.3 8.4 5.6h7.2l3.5 6.7-3.3 6.2Z',
+    'M8.4 5.6 12 12.3l3.6-6.7',
+    'M4.9 12.3H12l3.8 6.2',
+    'M12 12.3l7.1.1',
+  ],
+  herb: [
+    'M11.8 18.8c.2-5.5 2.4-9.5 6.8-12.1',
+    'M13.8 11.4c-.2-3.5 1.5-5.7 5.1-6.6.4 3.4-1.3 5.6-5.1 6.6Z',
+    'M10.4 14.3c-3.2.2-5.3-1.3-6.3-4.5 3.2-.4 5.3 1.1 6.3 4.5Z',
+    'M11.3 16c-2.5.7-4.3.1-5.4-1.9',
+  ],
+  fiber: [
+    'M8.3 5.3c2.2 3.2 2.2 5.7 0 8.9-1.5 2.2-1.4 3.7.3 4.5',
+    'M12 4.8c1.8 3 1.7 5.7-.2 8.2-1.6 2.1-1.4 3.9.6 5.4',
+    'M15.6 5.3c-1.3 3.2-1.1 5.7.8 7.7 1.9 2 1.7 3.8-.5 5.4',
+    'M6.7 15.3c3.8.9 7.4.9 10.8 0',
+  ],
+} as const
+
+type PlayerStatKey = keyof typeof statIconPaths
+
+interface PlayerStat {
+  key: PlayerStatKey
+  label: string
+  value: string
+  iconPaths: readonly string[]
+}
+
 const displayName = computed(() => {
   if (props.loading && !props.player) return '加载中'
 
@@ -303,6 +357,30 @@ const ageLabel = computed(() => `${formatValue(props.player?.tick_age_string ?? 
 const reputationLabel = computed(() => formatValue(props.player?.reputation))
 const grainLabel = computed(() => props.claimLoading ? '--' : formatValue(props.claimInventory.grainCurrency))
 const stoneLabel = computed(() => props.claimLoading ? '--' : formatValue(props.claimInventory.stoneCurrency))
+const primaryPlayerStats = computed<PlayerStat[]>(() => [
+  createPlayerStat('reputation', '声望', reputationLabel.value),
+  createPlayerStat('stone', '灵石', stoneLabel.value),
+  createPlayerStat('grain', '粮食', grainLabel.value),
+])
+const secondaryCurrencyStats = computed<PlayerStat[]>(() => {
+  const secondaryCurrencies = [
+    ['wood', '木材', props.claimInventory.woodCurrency],
+    ['quarry', '石头', props.claimInventory.quarryCurrency],
+    ['iron', '矿石', props.claimInventory.ironCurrency],
+    ['herb', '药材', props.claimInventory.herbCurrency],
+    ['fiber', '纤维', props.claimInventory.fiberCurrency],
+  ] as const
+
+  const stats: PlayerStat[] = []
+
+  for (const [key, label, quantity] of secondaryCurrencies) {
+    if (getPositiveQuantity(quantity) <= 0) continue
+
+    stats.push(createPlayerStat(key, label, props.claimLoading ? '--' : formatValue(quantity)))
+  }
+
+  return stats
+})
 const staminaValue = computed(() => clampStat(props.player?.stamina))
 const staminaPercent = computed(() => staminaValue.value)
 const landCountLabel = computed(() => formatValue(props.player?.count_land))
@@ -359,6 +437,19 @@ function formatValue(value: number | string | null | undefined) {
   if (value === null || value === undefined || value === '') return '--'
 
   return String(value)
+}
+
+function createPlayerStat(key: PlayerStatKey, label: string, value: string): PlayerStat {
+  return {
+    key,
+    label,
+    value,
+    iconPaths: statIconPaths[key],
+  }
+}
+
+function getPositiveQuantity(value: number | null | undefined) {
+  return Math.max(0, Number(value) || 0)
 }
 
 function formatItemAriaLabel(name: string, description: string) {
@@ -437,7 +528,8 @@ function emitCardHeight() {
   z-index: 26;
   left: 18px;
   display: flex;
-  width: min(320px, calc(100vw - 36px));
+  box-sizing: border-box;
+  width: var(--game-left-panel-width, min(370px, calc(100vw - 36px)));
   min-height: 76px;
   align-items: center;
   gap: 12px;
@@ -446,7 +538,7 @@ function emitCardHeight() {
   border-radius: 8px;
   background: rgb(255 247 223 / 86%);
   box-shadow: 0 14px 32px rgb(72 61 36 / 16%);
-  padding: 12px 76px 13px 12px;
+  padding: 12px;
   backdrop-filter: blur(12px);
 }
 
@@ -570,6 +662,8 @@ function emitCardHeight() {
   align-items: center;
   gap: 8px;
   min-width: 0;
+  box-sizing: border-box;
+  padding-right: 68px;
   line-height: 1;
 }
 
@@ -590,25 +684,128 @@ function emitCardHeight() {
 }
 
 .player-stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  display: grid;
+  gap: 7px;
   margin-top: 7px;
 }
 
+.player-stats-primary {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.player-stats-secondary {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  padding-top: 1px;
+  padding-bottom: 4px;
+}
+
 .player-stat {
+  --stat-bg: rgb(255 242 204 / 68%);
+  --stat-border: rgb(173 135 64 / 34%);
+  --stat-color: #5b4828;
+  --stat-icon-bg: rgb(255 249 232 / 92%);
+
   display: inline-flex;
   min-width: 0;
+  max-width: 100%;
   align-items: center;
-  gap: 5px;
-  border: 1px solid rgb(173 135 64 / 34%);
+  border: 1px solid var(--stat-border);
   border-radius: 999px;
-  background: rgb(255 242 204 / 68%);
-  padding: 2px 8px 2px 3px;
-  color: #5b4828;
+  background: var(--stat-bg);
+  color: var(--stat-color);
   font-size: 11px;
   font-weight: 900;
   line-height: 1.1;
+  outline: none;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 54%);
+}
+
+.player-stat:hover,
+.player-stat:focus-visible {
+  border-color: rgb(104 124 69 / 58%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 54%),
+  0 0 0 2px rgb(104 124 69 / 14%);
+}
+
+.player-stat-primary {
+  flex: 0 1 auto;
+  min-width: 0;
+  min-height: 26px;
+  justify-content: center;
+  gap: 4px;
+  padding: 3px 7px 3px 4px;
+}
+
+.player-stat-secondary {
+  flex: 0 1 auto;
+  min-width: 0;
+  min-height: 22px;
+  justify-content: center;
+  gap: 4px;
+  padding: 2px 7px 2px 3px;
+  font-size: 10px;
+}
+
+.player-stat.is-reputation {
+  --stat-bg: rgb(255 239 178 / 72%);
+  --stat-border: rgb(184 130 42 / 42%);
+  --stat-color: #6a4a12;
+  --stat-icon-bg: rgb(255 248 225 / 94%);
+}
+
+.player-stat.is-stone {
+  --stat-bg: rgb(225 238 255 / 76%);
+  --stat-border: rgb(80 118 160 / 34%);
+  --stat-color: #315d85;
+  --stat-icon-bg: rgb(243 248 255 / 94%);
+}
+
+.player-stat.is-grain {
+  --stat-bg: rgb(234 242 190 / 76%);
+  --stat-border: rgb(113 138 55 / 34%);
+  --stat-color: #546d23;
+  --stat-icon-bg: rgb(249 252 231 / 94%);
+}
+
+.player-stat.is-wood {
+  --stat-bg: rgb(236 223 202 / 76%);
+  --stat-border: rgb(132 95 58 / 34%);
+  --stat-color: #6d4a25;
+  --stat-icon-bg: rgb(255 249 238 / 94%);
+}
+
+.player-stat.is-quarry {
+  --stat-bg: rgb(232 235 232 / 78%);
+  --stat-border: rgb(105 114 102 / 34%);
+  --stat-color: #536052;
+  --stat-icon-bg: rgb(248 249 247 / 94%);
+}
+
+.player-stat.is-iron {
+  --stat-bg: rgb(229 235 241 / 78%);
+  --stat-border: rgb(91 106 121 / 34%);
+  --stat-color: #485a69;
+  --stat-icon-bg: rgb(247 249 251 / 94%);
+}
+
+.player-stat.is-herb {
+  --stat-bg: rgb(224 244 218 / 76%);
+  --stat-border: rgb(76 140 79 / 34%);
+  --stat-color: #3f7a42;
+  --stat-icon-bg: rgb(244 253 242 / 94%);
+}
+
+.player-stat.is-fiber {
+  --stat-bg: rgb(221 241 238 / 76%);
+  --stat-border: rgb(69 132 128 / 34%);
+  --stat-color: #3f7774;
+  --stat-icon-bg: rgb(243 252 250 / 94%);
 }
 
 .player-stat-icon {
@@ -617,16 +814,21 @@ function emitCardHeight() {
   height: 20px;
   flex: 0 0 auto;
   place-items: center;
-  border: 1px solid rgb(173 135 64 / 30%);
+  border: 1px solid var(--stat-border);
   border-radius: 999px;
-  background: rgb(255 249 232 / 92%);
+  background: var(--stat-icon-bg);
   color: currentColor;
   outline: none;
 }
 
-.player-stat-icon:focus-visible {
-  border-color: rgb(104 124 69 / 58%);
-  box-shadow: 0 0 0 2px rgb(104 124 69 / 18%);
+.player-stat-primary .player-stat-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.player-stat-secondary .player-stat-icon {
+  width: 16px;
+  height: 16px;
 }
 
 .player-stat-icon svg {
@@ -639,17 +841,39 @@ function emitCardHeight() {
   stroke-width: 1.8;
 }
 
+.player-stat-secondary .player-stat-icon svg {
+  width: 12px;
+  height: 12px;
+}
+
+.player-stat-primary .player-stat-icon svg {
+  width: 12px;
+  height: 12px;
+}
+
+.player-stat-label {
+  display: block;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.player-stat-primary .player-stat-label {
+  flex: 0 0 auto;
+}
+
 .player-stat-value {
   display: block;
   min-width: 0;
+  white-space: nowrap;
   font: inherit;
+  font-variant-numeric: tabular-nums;
 }
 
 .player-claim-items {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
-  margin-top: 7px;
+  margin-top: 10px;
 }
 
 .player-claim-items button {
@@ -721,17 +945,15 @@ function emitCardHeight() {
   .top-player-card {
     top: 12px;
     left: 12px;
-    width: min(300px, calc(100vw - 24px));
   }
 }
 
 @media (max-width: 640px) {
   .top-player-card {
-    width: min(228px, calc(100vw - 120px));
     min-height: 64px;
     align-items: center;
     gap: 8px;
-    padding: 9px 72px 10px 9px;
+    padding: 9px;
   }
 
   .player-avatar {
@@ -764,6 +986,42 @@ function emitCardHeight() {
 
   .player-stats {
     margin-top: 5px;
+    gap: 6px;
+  }
+
+  .player-stats-secondary {
+    gap: 5px;
+    padding-bottom: 1px;
+  }
+
+  .player-stats-primary {
+    gap: 3px;
+  }
+
+  .player-stat-primary {
+    min-height: 22px;
+    padding: 2px 4px 2px 2px;
+    font-size: 10px;
+  }
+
+  .player-stat-primary .player-stat-icon {
+    width: 14px;
+    height: 14px;
+  }
+
+  .player-stat-secondary {
+    min-height: 20px;
+    padding: 1px 5px 1px 2px;
+    font-size: 10px;
+  }
+
+  .player-stat-secondary .player-stat-icon {
+    width: 15px;
+    height: 15px;
+  }
+
+  .player-claim-items {
+    margin-top: 8px;
   }
 }
 </style>

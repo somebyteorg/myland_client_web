@@ -3,6 +3,7 @@ import type {GameItemType, PlantAnimationEffect, PlantType} from './types'
 export const ITEM_TYPE_GRAIN_SEED = 'grain_seed' satisfies GameItemType
 export const ITEM_TYPE_GRAIN_CROP = 'grain_crop' satisfies GameItemType
 export const ITEM_TYPE_PROP = 'prop' satisfies GameItemType
+export const ITEM_TYPE_TOOL = 'tool' satisfies GameItemType
 
 export const fallbackPlantAnimationEffect: PlantAnimationEffect = {
     seedColor: '#8b6b3a',
