@@ -1,6 +1,7 @@
 import {toOwnerType} from './ownerTypes'
 import {PLAYER_STATUE_MIN_FOOTPRINT_SIZE} from './playerStatueConfig'
 import type {MapItemOwnerData, MapItemResponse, MapObject, NeighborInfoResponse, Tile} from './types'
+import {reactive} from 'vue'
 
 export interface MapItemOccupiedRect {
     x: number
@@ -9,8 +10,13 @@ export interface MapItemOccupiedRect {
     height: number
 }
 
+// Neighbor loading flags are read directly by Vue components, so each map object must be reactive.
+export function createReactiveMapObject(object: MapObject) {
+    return reactive(object) as MapObject
+}
+
 export function createHomeObjectFromItem(item: MapItemResponse, index: number, currentPlayerId?: string | null): MapObject {
-    return {
+    return createReactiveMapObject({
         id: `map-item-home-${item.x}-${item.y}-${index}`,
         type: 'home',
         x: item.x,
@@ -21,11 +27,11 @@ export function createHomeObjectFromItem(item: MapItemResponse, index: number, c
         ownerType: toOwnerType(item.owner_type, item.owner_data?.player_id, currentPlayerId),
         ownerData: createMapItemOwnerData(item),
         createdAtString: formatMapItemCreatedAt(item),
-    }
+    })
 }
 
 export function createPlayerStatueObjectFromItem(item: MapItemResponse, index: number, currentPlayerId?: string | null): MapObject {
-    return {
+    return createReactiveMapObject({
         id: `map-item-player-statue-${item.x}-${item.y}-${index}`,
         type: 'player_statue',
         x: item.x,
@@ -38,7 +44,7 @@ export function createPlayerStatueObjectFromItem(item: MapItemResponse, index: n
         createdAtString: formatMapItemCreatedAt(item),
         playerStatueName: getPlayerStatueName(item),
         playerStatueUrl: getPlayerStatueUrl(item),
-    }
+    })
 }
 
 export function createMapObjectsFromItems(items: MapItemResponse[], currentPlayerId?: string | null) {

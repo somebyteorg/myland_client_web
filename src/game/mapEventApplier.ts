@@ -1,6 +1,7 @@
 import {removeButterfliesFromObject, removeButterfliesFromTile, removeButterfliesFromTileIfNeeded} from './butterflies'
 import {getHomeObjectOwnerLabel, isHomeObject} from './objectRules'
 import {createHomeTilePatch} from './tileState'
+import {createReactiveMapObject} from './mapObjectData'
 import type {
     Butterfly,
     MapObject,
@@ -74,9 +75,10 @@ export function createMapEventApplier(options: MapEventApplierOptions) {
     function applyObjectCreated(object: MapObject) {
         if (options.mapObjects.some((item) => item.id === object.id)) return
 
-        options.mapObjects.push(object)
-        rememberOccupiedObject(object)
-        removeButterfliesFromObject(options.butterflyAnchors, object)
+        const reactiveObject = createReactiveMapObject(object)
+        options.mapObjects.push(reactiveObject)
+        rememberOccupiedObject(reactiveObject)
+        removeButterfliesFromObject(options.butterflyAnchors, reactiveObject)
     }
 
     function applyObjectPatch(patch: ObjectPatch) {
