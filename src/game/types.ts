@@ -33,6 +33,7 @@ export interface ItemInstanceDurabilityData {
 }
 
 export interface ItemInventoryInstanceData {
+    instance_id?: number | null
     quality: string | null
     quality_string: string | null
     durability_data: ItemInstanceDurabilityData | null

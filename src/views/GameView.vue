@@ -27,6 +27,7 @@
         :claim-mode="claimMode || claimInventory.pioneerToken > 0 || claimInventory.landDeed > 0 || claimInventory.playerStatueToken > 0"
         :item-catalog="itemCatalog"
         :land-placement-mode="landPlacementMode"
+        :map-id="mapInfo.id || MAP_FILE_ID_NAMELESS"
         :player="playerInfo"
         :player-id="sign.player_id"
         :player-loading="playerLoading"

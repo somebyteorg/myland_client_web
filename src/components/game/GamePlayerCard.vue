@@ -2,7 +2,7 @@
   <section
       ref="cardRef"
       class="top-player-card"
-      :class="{ 'has-chronicle-open': showChronicle, 'has-craft-open': showCraft, 'has-inventory-open': showInventory, 'has-shop-open': showShop }"
+      :class="{ 'has-chronicle-open': showChronicle, 'has-craft-open': showCraft, 'has-gather-open': showGather, 'has-inventory-open': showInventory, 'has-shop-open': showShop }"
       :aria-busy="loading"
   >
     <div class="player-card-actions">
@@ -25,6 +25,28 @@
           <path d="M9 8.1a3 3 0 0 1 6 0"/>
           <path d="M7.4 12h9.2"/>
           <path d="M10.1 15.1h3.8"/>
+        </svg>
+      </button>
+      <button
+          class="player-card-action-button player-gather-toggle"
+          type="button"
+          :class="{ 'is-active': showGather }"
+          :aria-expanded="showGather"
+          aria-label="打开采集"
+          :disabled="!playerId"
+          @click="toggleGather"
+          @focus="showGatherTooltip"
+          @blur="hideTooltip"
+          @mouseenter="showGatherTooltip"
+          @mousemove="moveTooltip"
+          @mouseleave="hideTooltip"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5.8 18.8c3.8-1.6 7.4-5 10.7-10.2"/>
+          <path d="M16.5 8.6 18.9 5"/>
+          <path d="M13.4 10.2c2.5.2 4.6 1.1 6.4 2.8"/>
+          <path d="M7.2 15.7 4.6 20"/>
+          <path d="M10.2 17.4c-1.6-1.7-2.4-3.7-2.4-6"/>
         </svg>
       </button>
       <button
@@ -252,6 +274,16 @@
         @inventory-updated="$emit('inventoryUpdated')"
     />
 
+    <GameGatherDialog
+        v-if="showGather && playerId"
+        :available-grain="claimInventory.grainCurrency"
+        :item-catalog="itemCatalog"
+        :map-id="mapId"
+        :player-id="playerId"
+        @close="showGather = false"
+        @inventory-updated="$emit('inventoryUpdated')"
+    />
+
     <GameInventoryDialog
         v-if="showInventory && playerId"
         :item-catalog="itemCatalog"
@@ -284,6 +316,7 @@
 
 <script setup lang="ts">
 import {computed, onBeforeUnmount, onMounted, ref, watch} from 'vue'
+import GameGatherDialog from '@/components/game/GameGatherDialog.vue'
 import GameInventoryDialog from '@/components/game/GameInventoryDialog.vue'
 import GameShopDialog from '@/components/game/GameShopDialog.vue'
 import GameTooltip from '@/components/game/GameTooltip.vue'
@@ -325,6 +358,7 @@ const props = defineProps<{
   claimMode: boolean
   itemCatalog: GameItem[]
   landPlacementMode: 'pioneer' | 'deed' | null
+  mapId: number
   player: PlayerInfo | null
   loading: boolean
 }>()
@@ -341,6 +375,7 @@ const {tooltip, showTooltip, moveTooltip, hideTooltip, setTooltipElement} = useF
 const cardRef = ref<HTMLElement | null>(null)
 const showChronicle = ref(false)
 const showCraft = ref(false)
+const showGather = ref(false)
 const showInventory = ref(false)
 const showShop = ref(false)
 let cardResizeObserver: ResizeObserver | null = null
@@ -476,6 +511,7 @@ const avatarUrl = computed(() => {
 watch(playerId, () => {
   showChronicle.value = false
   showCraft.value = false
+  showGather.value = false
   showInventory.value = false
   showShop.value = false
 })
@@ -536,6 +572,7 @@ function handleUseDeed() {
 function toggleChronicle() {
   hideTooltip()
   showCraft.value = false
+  showGather.value = false
   showInventory.value = false
   showShop.value = false
   showChronicle.value = !showChronicle.value
@@ -544,15 +581,26 @@ function toggleChronicle() {
 function toggleCraft() {
   hideTooltip()
   showChronicle.value = false
+  showGather.value = false
   showInventory.value = false
   showShop.value = false
   showCraft.value = !showCraft.value
+}
+
+function toggleGather() {
+  hideTooltip()
+  showChronicle.value = false
+  showCraft.value = false
+  showInventory.value = false
+  showShop.value = false
+  showGather.value = !showGather.value
 }
 
 function toggleInventory() {
   hideTooltip()
   showChronicle.value = false
   showCraft.value = false
+  showGather.value = false
   showShop.value = false
   showInventory.value = !showInventory.value
 }
@@ -561,6 +609,7 @@ function toggleShop() {
   hideTooltip()
   showChronicle.value = false
   showCraft.value = false
+  showGather.value = false
   showInventory.value = false
   showShop.value = !showShop.value
 }
@@ -591,6 +640,10 @@ function showChronicleTooltip(event: MouseEvent | FocusEvent) {
 
 function showCraftTooltip(event: MouseEvent | FocusEvent) {
   showTooltip('制作', '', event)
+}
+
+function showGatherTooltip(event: MouseEvent | FocusEvent) {
+  showTooltip('采集', '', event)
 }
 
 function showInventoryTooltip(event: MouseEvent | FocusEvent) {
@@ -641,12 +694,14 @@ function emitCardHeight() {
 .top-player-card:focus-within,
 .top-player-card.has-chronicle-open,
 .top-player-card.has-craft-open,
+.top-player-card.has-gather-open,
 .top-player-card.has-inventory-open,
 .top-player-card.has-shop-open {
   z-index: 88;
 }
 
 .top-player-card.has-craft-open,
+.top-player-card.has-gather-open,
 .top-player-card.has-inventory-open,
 .top-player-card.has-shop-open {
   z-index: 96;
@@ -762,7 +817,7 @@ function emitCardHeight() {
   gap: 8px;
   min-width: 0;
   box-sizing: border-box;
-  padding-right: 138px;
+  padding-right: 172px;
   line-height: 1;
 }
 

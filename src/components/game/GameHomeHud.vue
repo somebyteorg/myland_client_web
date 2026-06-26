@@ -7,6 +7,7 @@
       :item-catalog="itemCatalog"
       :land-placement-mode="landPlacementMode"
       :loading="playerLoading"
+      :map-id="mapId"
       :player="player"
       @inventory-updated="$emit('inventoryUpdated')"
       @locate-chronicle-tile="$emit('locateChronicleTile', $event)"
@@ -70,6 +71,7 @@ defineProps<{
   debugToggleEnabled?: boolean
   itemCatalog: GameItem[]
   landPlacementMode: 'pioneer' | 'deed' | null
+  mapId: number
   player: PlayerInfo | null
   playerId: string
   time: GameTimeInfo | null
