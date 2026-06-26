@@ -4,15 +4,20 @@
       <div class="game-modal shop-modal" role="dialog" aria-modal="true"
            :aria-busy="loading || purchasingItemId !== null">
         <header class="shop-modal-header">
-          <div class="shop-modal-title">
-            <span class="shop-modal-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24">
-                <path d="M6.8 8.1h10.4l-.8 10.4H7.6z"/>
-                <path d="M9 8.1a3 3 0 0 1 6 0"/>
-                <path d="M7.4 12h9.2"/>
-              </svg>
-            </span>
-            <strong>商城</strong>
+          <div class="shop-modal-heading">
+            <div class="shop-modal-title">
+              <span class="shop-modal-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path d="M6.8 8.1h10.4l-.8 10.4H7.6z"/>
+                  <path d="M9 8.1a3 3 0 0 1 6 0"/>
+                  <path d="M7.4 12h9.2"/>
+                </svg>
+              </span>
+              <strong>商城</strong>
+            </div>
+            <div class="shop-modal-subtitle">
+              相关道具需要拥有{{ hammerName }}后才可使用，{{ hammerOwnershipLabel }}。
+            </div>
           </div>
           <button
               class="shop-close-button"
@@ -133,10 +138,12 @@ import {computed, onBeforeUnmount, onMounted, ref} from 'vue'
 import GameTooltip from '@/components/game/GameTooltip.vue'
 import {useFloatingTooltip} from '@/composables/useFloatingTooltip'
 import {resolveApiErrorMessage} from '@/utils/apiErrors'
+import {ITEM_ID_TOOL_HAMMER} from '@/constants'
 import {createMarketShopOrder, loadMarketShopItems, type MarketShopItem} from '@/game/marketShop'
 import type {GameItem} from '@/game/types'
 
 const props = defineProps<{
+  hasHammer: boolean
   itemCatalog: GameItem[]
   playerId: string
 }>()
@@ -155,6 +162,9 @@ const selectedProduct = ref<MarketShopItem | null>(null)
 const quantity = ref(1)
 const itemById = computed(() => new Map(props.itemCatalog.map((item) => [item.item_id, item])))
 const products = computed(() => shopItems.value.filter((item) => Number.isFinite(item.item_id)))
+const hammerItem = computed(() => itemById.value.get(ITEM_ID_TOOL_HAMMER) ?? null)
+const hammerName = computed(() => hammerItem.value?.item_name?.trim() || '锤子')
+const hammerOwnershipLabel = computed(() => props.hasHammer ? '当前已拥有' : '当前未拥有，不建议购买')
 const totalPriceLabel = computed(() => {
   if (!selectedProduct.value || !Number.isFinite(selectedProduct.value.carrot)) return '--'
 
@@ -308,8 +318,15 @@ function appendReturnUrl(payUrl: string) {
 }
 
 .shop-modal .shop-modal-header {
+  align-items: flex-start;
   border-bottom: 1px solid rgb(173 135 64 / 24%);
   padding-bottom: 12px;
+}
+
+.shop-modal-heading {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
 }
 
 .shop-modal-title {
@@ -322,6 +339,14 @@ function appendReturnUrl(payUrl: string) {
 .shop-modal-title strong {
   font-size: 18px;
   line-height: 1;
+}
+
+.shop-modal-subtitle {
+  max-width: 510px;
+  color: #6b593c;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
 }
 
 .shop-modal-icon {

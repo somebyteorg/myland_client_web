@@ -1,7 +1,6 @@
 import type {Ref} from 'vue'
-import type {LandPlacementMode, RefreshClaimInventoryOptions} from '@/composables/game/useLandClaims'
+import type {LandPlacementMode} from '@/composables/game/useLandClaims'
 import type {AbandonDialogState, ClaimDialogState} from '@/composables/game/useGameDialogs'
-import {ITEM_ID_PROP_LAND_DEED} from '@/constants'
 import {
     createCurrentPlayerOwnerData,
     createGrantedHomeObject,
@@ -48,7 +47,7 @@ interface UseLandOperationsOptions {
     focusMapObject: (object: MapObject) => void
     focusTile: (tile: Tile, center?: boolean) => void
     refreshHomeData: () => Promise<void>
-    refreshClaimInventory: (options?: RefreshClaimInventoryOptions) => Promise<void>
+    refreshClaimInventory: () => Promise<void>
     loadLandChunk: (chunk: { x: number; y: number; w: number; h: number }) => Promise<void>
     completePioneerClaim: () => void
     resetClaimDialog: () => void
@@ -118,7 +117,7 @@ export function useLandOperations(options: UseLandOperationsOptions) {
             await Promise.all([
                 options.loadLandChunk({x: tile.x, y: tile.y, w: options.homeGrantSize, h: options.homeGrantSize}),
                 options.refreshHomeData(),
-                options.refreshClaimInventory({extraItemIds: [ITEM_ID_PROP_LAND_DEED]}),
+                options.refreshClaimInventory(),
             ])
         } catch (error) {
             console.error(error)

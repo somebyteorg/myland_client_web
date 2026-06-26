@@ -24,6 +24,7 @@ interface UseTileRuleSetOptions {
     landPlacementMode: ComputedRef<LandPlacementMode | null>
     canSubmitClaim: ComputedRef<boolean>
     tileAt: () => TileLookup
+    getCurrentPlayerId: () => string | null | undefined
     getOwnHomeRect: () => TileRect | null
     getMapObjects: () => MapObject[]
     getOccupiedRects: () => OccupiedRect[]
@@ -78,7 +79,7 @@ export function useTileRuleSet(options: UseTileRuleSetOptions) {
     }
 
     function canAbandonTile(tile: Tile) {
-        return canAbandonTileRule(tile, options.tileAt())
+        return canAbandonTileRule(tile, options.getCurrentPlayerId())
     }
 
     function canRequestPurchase(tile: Tile) {

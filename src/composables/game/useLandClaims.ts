@@ -13,14 +13,17 @@ import {
     ITEM_ID_PROP_LAND_DEED,
     ITEM_ID_PROP_LAND_GRANT,
     ITEM_ID_PROP_PLAYER_STATUE,
+    ITEM_ID_TOOL_HAMMER,
 } from '@/constants'
-import type {GameItem, ItemInventoryEntry} from '@/game/types'
+import {
+    ITEM_TYPE_CURRENCY,
+    ITEM_TYPE_GRAIN_SEED,
+    ITEM_TYPE_PROP,
+    ITEM_TYPE_TOOL,
+} from '@/game/itemCatalogData'
+import type {GameItem, ItemInventoryEntry, ItemInventoryListResponse} from '@/game/types'
 
 export type LandPlacementMode = 'pioneer' | 'deed'
-
-export interface RefreshClaimInventoryOptions {
-    extraItemIds?: number[]
-}
 
 interface UseLandClaimsOptions {
     mapReady: ComputedRef<boolean>
@@ -41,6 +44,13 @@ const currencyInventoryEntries = [
     [ITEM_ID_CURRENCY_FIBER, 'fiberCurrency'],
 ] as const
 
+const claimInventoryItemTypes = [
+    ITEM_TYPE_CURRENCY,
+    ITEM_TYPE_GRAIN_SEED,
+    ITEM_TYPE_PROP,
+    ITEM_TYPE_TOOL,
+] as const
+
 export function useLandClaims(options: UseLandClaimsOptions) {
     const pioneerGuideDialog = reactive({
         visible: false,
@@ -57,6 +67,7 @@ export function useLandClaims(options: UseLandClaimsOptions) {
         ironCurrency: 0,
         herbCurrency: 0,
         fiberCurrency: 0,
+        hammerTool: 0,
     })
     const seedInventory = reactive<Record<number, number>>({})
     const claimItemInfo = reactive({
@@ -137,6 +148,7 @@ export function useLandClaims(options: UseLandClaimsOptions) {
         claimInventory.pioneerToken = 0
         claimInventory.landDeed = 0
         claimInventory.playerStatueToken = 0
+        claimInventory.hammerTool = 0
         resetCurrencyInventory()
         resetSeedInventory()
         claimInventoryLoading.value = false
@@ -202,25 +214,25 @@ export function useLandClaims(options: UseLandClaimsOptions) {
         }
     }
 
-    async function refreshClaimInventory(refreshOptions: RefreshClaimInventoryOptions = {}) {
+    async function refreshClaimInventory() {
         const playerId = options.getPlayerId()
         const seedItemIds = getTrackedSeedItemIds()
         if (!playerId) {
             claimInventory.pioneerToken = 0
             claimInventory.landDeed = 0
             claimInventory.playerStatueToken = 0
+            claimInventory.hammerTool = 0
             resetCurrencyInventory()
             resetSeedInventory()
             return
         }
 
-        const itemIds = getTrackedInventoryItemIds(seedItemIds, refreshOptions.extraItemIds)
         claimInventory.pioneerToken = 0
         claimInventory.landDeed = 0
         claimInventory.playerStatueToken = 0
+        claimInventory.hammerTool = 0
         resetCurrencyInventory()
         resetSeedInventory(seedItemIds)
-        if (itemIds.length === 0) return
 
         claimInventoryLoading.value = true
 
@@ -228,18 +240,25 @@ export function useLandClaims(options: UseLandClaimsOptions) {
             const data = await api.get('api/item/inventory', {
                 searchParams: [
                     ['player_id', playerId],
-                    ...itemIds.map((itemId) => ['item_ids[]', String(itemId)]),
+                    ['page_size', '1000'],
+                    ...claimInventoryItemTypes.map((itemType) => ['item_types[]', itemType]),
                 ],
-            }).json<ItemInventoryEntry[]>()
+            }).json<ItemInventoryListResponse>()
+            const inventoryItems = data.items ?? []
 
-            claimInventory.pioneerToken = itemIds.includes(ITEM_ID_PROP_LAND_GRANT) ? getInventoryQuantity(data, ITEM_ID_PROP_LAND_GRANT) : 0
-            claimInventory.landDeed = itemIds.includes(ITEM_ID_PROP_LAND_DEED) ? getInventoryQuantity(data, ITEM_ID_PROP_LAND_DEED) : 0
-            claimInventory.playerStatueToken = getInventoryQuantity(data, ITEM_ID_PROP_PLAYER_STATUE)
+            claimInventory.pioneerToken = options.mapReady.value && !options.hasOwnHomeOnCurrentMap.value
+                ? getInventoryQuantity(inventoryItems, ITEM_ID_PROP_LAND_GRANT)
+                : 0
+            claimInventory.landDeed = options.mapReady.value && options.hasOwnHomeOnCurrentMap.value
+                ? getInventoryQuantity(inventoryItems, ITEM_ID_PROP_LAND_DEED)
+                : 0
+            claimInventory.playerStatueToken = getInventoryQuantity(inventoryItems, ITEM_ID_PROP_PLAYER_STATUE)
+            claimInventory.hammerTool = getInventoryQuantity(inventoryItems, ITEM_ID_TOOL_HAMMER)
             for (const [itemId, key] of currencyInventoryEntries) {
-                claimInventory[key] = getInventoryQuantity(data, itemId)
+                claimInventory[key] = getInventoryQuantity(inventoryItems, itemId)
             }
             for (const itemId of seedItemIds) {
-                seedInventory[itemId] = getInventoryQuantity(data, itemId)
+                seedInventory[itemId] = getInventoryQuantity(inventoryItems, itemId)
             }
             claimMessageTone.value = 'info'
             if (claimMessage.value === '道具读取失败，请稍后再试') claimMessage.value = ''
@@ -248,6 +267,7 @@ export function useLandClaims(options: UseLandClaimsOptions) {
             claimInventory.pioneerToken = 0
             claimInventory.landDeed = 0
             claimInventory.playerStatueToken = 0
+            claimInventory.hammerTool = 0
             resetCurrencyInventory()
             resetSeedInventory(seedItemIds)
             claimMessageTone.value = 'error'
@@ -265,23 +285,6 @@ export function useLandClaims(options: UseLandClaimsOptions) {
                 .map((itemId) => Number(itemId))
                 .filter((itemId) => Number.isFinite(itemId) && itemId > 0),
         ))
-    }
-
-    function getTrackedInventoryItemIds(seedItemIds: number[], extraItemIds: number[] = []) {
-        const itemIds = [
-            ...seedItemIds,
-            ...currencyInventoryEntries.map(([itemId]) => itemId),
-            ITEM_ID_PROP_PLAYER_STATUE,
-            ...extraItemIds
-                .map((itemId) => Number(itemId))
-                .filter((itemId) => Number.isFinite(itemId) && itemId > 0),
-        ]
-
-        if (options.mapReady.value) {
-            itemIds.push(options.hasOwnHomeOnCurrentMap.value ? ITEM_ID_PROP_LAND_DEED : ITEM_ID_PROP_LAND_GRANT)
-        }
-
-        return Array.from(new Set(itemIds))
     }
 
     function resetSeedInventory(seedItemIds: number[] = []) {

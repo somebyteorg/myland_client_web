@@ -26,14 +26,36 @@ export interface GameItemListResponse {
     items: GameItem[]
 }
 
+export interface ItemInstanceDurabilityData {
+    code: string
+    string: string
+    efficiency: number
+}
+
+export interface ItemInventoryInstanceData {
+    quality: string | null
+    quality_string: string | null
+    durability_data: ItemInstanceDurabilityData | null
+    creator_player_name?: string | null
+    tick_created_format?: GameTickFormat | null
+}
+
 export interface ItemInventoryEntry {
     location_type: string
     grid_index: number | null
     item_id: number
     quantity: number
     tick_expired: number | null
-    tick_expired_format: string | null
+    tick_expired_format: GameTickFormat | string | null
     is_stolen: boolean
+    instance: ItemInventoryInstanceData | null
+}
+
+export interface ItemInventoryListResponse {
+    page: number
+    page_size: number
+    total: number
+    items: ItemInventoryEntry[]
 }
 
 export interface LandGrantResponse {

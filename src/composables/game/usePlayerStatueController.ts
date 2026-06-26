@@ -16,6 +16,7 @@ interface UsePlayerStatueControllerOptions {
     getPlayerId: () => string | null | undefined
     getPlayerStatueInventoryAvailable: () => number
     canBuildPlayerStatueTile: (tile: Tile) => boolean
+    canUsePlacementToolAt: (tile: Tile) => boolean
     hideContextMenu: () => void
     hideHomeHoverCard: () => void
     hideLandHoverCard: () => void
@@ -40,7 +41,9 @@ export function usePlayerStatueController(options: UsePlayerStatueControllerOpti
     let uploadedStatueImage: UploadedStatueImageCache | null = null
 
     function canUseAt(tile: Tile) {
-        return options.getPlayerStatueInventoryAvailable() > 0 && options.canBuildPlayerStatueTile(tile)
+        return options.getPlayerStatueInventoryAvailable() > 0 &&
+            options.canBuildPlayerStatueTile(tile) &&
+            options.canUsePlacementToolAt(tile)
     }
 
     function openDialog(tile: Tile) {
@@ -50,6 +53,10 @@ export function usePlayerStatueController(options: UsePlayerStatueControllerOpti
         }
         if (options.getPlayerStatueInventoryAvailable() <= 0) {
             options.showErrorToast('没有可用雕像令')
+            return
+        }
+        if (!options.canUsePlacementToolAt(tile)) {
+            options.showErrorToast('离开家园周围建立雕像需要锤子')
             return
         }
 
@@ -101,6 +108,10 @@ export function usePlayerStatueController(options: UsePlayerStatueControllerOpti
             dialog.errorMessage = '没有可用雕像令'
             return
         }
+        if (!options.canUsePlacementToolAt(tile)) {
+            dialog.errorMessage = '离开家园周围建立雕像需要锤子'
+            return
+        }
 
         dialog.submitting = true
         dialog.errorMessage = ''
@@ -119,9 +130,8 @@ export function usePlayerStatueController(options: UsePlayerStatueControllerOpti
             const nextCount = Number(response.count_statue)
             if (Number.isFinite(nextCount)) {
                 options.setPlayerStatueInventoryQuantity(nextCount)
-            } else {
-                await options.refreshClaimInventory()
             }
+            await options.refreshClaimInventory()
             await options.refreshMapItems(mapId, createPlayerStatueRefreshRect(response.item_data, tile))
             const createdStatue = findCreatedPlayerStatueObject(options.getMapObjects(), response.item_data, tile)
             if (createdStatue) options.focusMapObject(createdStatue, false)

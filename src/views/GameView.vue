@@ -193,6 +193,7 @@ import {
   updateLocalCropLifecycle,
 } from '@/game/cropLifecycle'
 import {getTileContextActions} from '@/game/contextActions'
+import {PLAYER_STATUE_MIN_FOOTPRINT_SIZE} from '@/game/playerStatueConfig'
 import {drawMapScene} from '@/game/renderScene'
 import {PixiStaticMapCache} from '@/game/pixiMapCache'
 import {destroyPixiTextureCache, getPixiTextureCacheStats} from '@/game/pixiDrawContext'
@@ -588,8 +589,8 @@ const {
   objectsAtTile,
   canClaimHomeTile,
   canPlaceLandAt,
-  canClaimDeedTile,
-  canSubmitLandPlacementAt,
+  canClaimDeedTile: canClaimDeedTileBase,
+  canSubmitLandPlacementAt: canSubmitLandPlacementAtBase,
   canFarmTile,
   canPlantTile,
   canClearCrop,
@@ -597,17 +598,60 @@ const {
   canAbandonTile,
   canRequestPurchase,
   canStealCrop,
-  canBuildPlayerStatueTile,
+  canBuildPlayerStatueTile: canBuildPlayerStatueTileBase,
 } = useTileRuleSet({
   hasOwnHomeOnCurrentMap,
   landPlacementMode,
   canSubmitClaim,
   tileAt: () => tileAt,
+  getCurrentPlayerId: () => sign.player_id,
   getOwnHomeRect: () => homeAnchor.value,
   getMapObjects: () => mapObjects,
   getOccupiedRects: () => occupiedMapRects,
   isRiverTile,
 })
+
+function canClaimDeedTile(tile: Tile) {
+  return canClaimDeedTileBase(tile) && canUsePlacementToolAt(tile)
+}
+
+function canSubmitLandPlacementAt(tile: Tile) {
+  if (landPlacementMode.value === 'deed') return canSubmitClaim.value && canClaimDeedTile(tile)
+
+  return canSubmitLandPlacementAtBase(tile)
+}
+
+function canUsePlacementToolAt(tile: Tile, width = 1, height = 1) {
+  return isPlacementAroundOwnHome(tile, width, height) || Math.max(0, Number(claimInventory.hammerTool) || 0) > 0
+}
+
+function isPlacementAroundOwnHome(tile: Tile, width = 1, height = 1) {
+  for (let y = tile.y; y < tile.y + height; y += 1) {
+    for (let x = tile.x; x < tile.x + width; x += 1) {
+      if (isPointAroundOwnHome(x, y)) return true
+    }
+  }
+
+  return false
+}
+
+function isPointAroundOwnHome(x: number, y: number) {
+  const rect = homeAnchor.value
+  if (!rect || rect.width <= 0 || rect.height <= 0) return false
+
+  const inExpandedRect =
+      x >= rect.x - 1 &&
+      x < rect.x + rect.width + 1 &&
+      y >= rect.y - 1 &&
+      y < rect.y + rect.height + 1
+  const inRect =
+      x >= rect.x &&
+      x < rect.x + rect.width &&
+      y >= rect.y &&
+      y < rect.y + rect.height
+
+  return inExpandedRect && !inRect
+}
 const {
   isTileCropActionPending,
   plantCropOnTile,
@@ -741,7 +785,8 @@ const playerStatue = usePlayerStatueController({
   getMapId: () => mapInfo.id || MAP_FILE_ID_NAMELESS,
   getPlayerId: () => sign.player_id,
   getPlayerStatueInventoryAvailable: () => playerStatueInventoryAvailable.value,
-  canBuildPlayerStatueTile,
+  canBuildPlayerStatueTile: canBuildPlayerStatueTileBase,
+  canUsePlacementToolAt: (tile) => canUsePlacementToolAt(tile, PLAYER_STATUE_MIN_FOOTPRINT_SIZE, PLAYER_STATUE_MIN_FOOTPRINT_SIZE),
   hideContextMenu,
   hideHomeHoverCard,
   hideLandHoverCard,

@@ -2,7 +2,7 @@
   <section
       ref="cardRef"
       class="top-player-card"
-      :class="{ 'has-chronicle-open': showChronicle, 'has-shop-open': showShop }"
+      :class="{ 'has-chronicle-open': showChronicle, 'has-inventory-open': showInventory, 'has-shop-open': showShop }"
       :aria-busy="loading"
   >
     <div class="player-card-actions">
@@ -25,6 +25,27 @@
           <path d="M9 8.1a3 3 0 0 1 6 0"/>
           <path d="M7.4 12h9.2"/>
           <path d="M10.1 15.1h3.8"/>
+        </svg>
+      </button>
+      <button
+          class="player-card-action-button player-inventory-toggle"
+          type="button"
+          :class="{ 'is-active': showInventory }"
+          :aria-expanded="showInventory"
+          aria-label="查看背包"
+          :disabled="!playerId"
+          @click="toggleInventory"
+          @focus="showInventoryTooltip"
+          @blur="hideTooltip"
+          @mouseenter="showInventoryTooltip"
+          @mousemove="moveTooltip"
+          @mouseleave="hideTooltip"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M8.2 8V6.9a3.8 3.8 0 0 1 7.6 0V8"/>
+          <path d="M6.2 8h11.6l1 11.2H5.2Z"/>
+          <path d="M8.6 12.2h6.8"/>
+          <path d="M8.6 15.4h4.2"/>
         </svg>
       </button>
       <button
@@ -202,8 +223,16 @@
         @locate="$emit('locateChronicleTile', $event)"
     />
 
+    <GameInventoryDialog
+        v-if="showInventory && playerId"
+        :item-catalog="itemCatalog"
+        :player-id="playerId"
+        @close="showInventory = false"
+    />
+
     <GameShopDialog
         v-if="showShop && playerId"
+        :has-hammer="hasHammerTool"
         :item-catalog="itemCatalog"
         :player-id="playerId"
         @close="showShop = false"
@@ -226,6 +255,7 @@
 
 <script setup lang="ts">
 import {computed, onBeforeUnmount, onMounted, ref, watch} from 'vue'
+import GameInventoryDialog from '@/components/game/GameInventoryDialog.vue'
 import GameShopDialog from '@/components/game/GameShopDialog.vue'
 import GameTooltip from '@/components/game/GameTooltip.vue'
 import PlayerChroniclePanel from '@/components/game/PlayerChroniclePanel.vue'
@@ -259,6 +289,7 @@ const props = defineProps<{
     ironCurrency: number
     herbCurrency: number
     fiberCurrency: number
+    hammerTool: number
   }
   claimLoading: boolean
   claimMode: boolean
@@ -278,6 +309,7 @@ const emit = defineEmits<{
 const {tooltip, showTooltip, moveTooltip, hideTooltip, setTooltipElement} = useFloatingTooltip()
 const cardRef = ref<HTMLElement | null>(null)
 const showChronicle = ref(false)
+const showInventory = ref(false)
 const showShop = ref(false)
 let cardResizeObserver: ResizeObserver | null = null
 let lastCardHeight = 0
@@ -357,6 +389,7 @@ const ageLabel = computed(() => `${formatValue(props.player?.tick_age_string ?? 
 const reputationLabel = computed(() => formatValue(props.player?.reputation))
 const grainLabel = computed(() => props.claimLoading ? '--' : formatValue(props.claimInventory.grainCurrency))
 const stoneLabel = computed(() => props.claimLoading ? '--' : formatValue(props.claimInventory.stoneCurrency))
+const hasHammerTool = computed(() => Math.max(0, Number(props.claimInventory.hammerTool) || 0) > 0)
 const primaryPlayerStats = computed<PlayerStat[]>(() => [
   createPlayerStat('reputation', '声望', reputationLabel.value),
   createPlayerStat('stone', '灵石', stoneLabel.value),
@@ -410,6 +443,7 @@ const avatarUrl = computed(() => {
 
 watch(playerId, () => {
   showChronicle.value = false
+  showInventory.value = false
   showShop.value = false
 })
 
@@ -468,13 +502,22 @@ function handleUseDeed() {
 
 function toggleChronicle() {
   hideTooltip()
+  showInventory.value = false
   showShop.value = false
   showChronicle.value = !showChronicle.value
+}
+
+function toggleInventory() {
+  hideTooltip()
+  showChronicle.value = false
+  showShop.value = false
+  showInventory.value = !showInventory.value
 }
 
 function toggleShop() {
   hideTooltip()
   showChronicle.value = false
+  showInventory.value = false
   showShop.value = !showShop.value
 }
 
@@ -500,6 +543,10 @@ function showStatTooltip(name: string, event: MouseEvent | FocusEvent) {
 
 function showChronicleTooltip(event: MouseEvent | FocusEvent) {
   showTooltip('编年史', '', event)
+}
+
+function showInventoryTooltip(event: MouseEvent | FocusEvent) {
+  showTooltip('背包', '', event)
 }
 
 function showShopTooltip(event: MouseEvent | FocusEvent) {
@@ -545,10 +592,12 @@ function emitCardHeight() {
 .top-player-card:hover,
 .top-player-card:focus-within,
 .top-player-card.has-chronicle-open,
+.top-player-card.has-inventory-open,
 .top-player-card.has-shop-open {
   z-index: 88;
 }
 
+.top-player-card.has-inventory-open,
 .top-player-card.has-shop-open {
   z-index: 96;
 }
@@ -663,7 +712,7 @@ function emitCardHeight() {
   gap: 8px;
   min-width: 0;
   box-sizing: border-box;
-  padding-right: 68px;
+  padding-right: 104px;
   line-height: 1;
 }
 

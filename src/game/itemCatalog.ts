@@ -2,6 +2,8 @@ import api from '@/utils/ky'
 import type {GameItem, GameItemListResponse, PlantDefinition, PlantDefinitionMap} from './types'
 import {
     fallbackPlantAnimationEffect,
+    ITEM_TYPE_BLUEPRINT,
+    ITEM_TYPE_CURRENCY,
     ITEM_TYPE_GRAIN_CROP,
     ITEM_TYPE_GRAIN_SEED,
     ITEM_TYPE_PROP,
@@ -11,10 +13,12 @@ import {
 
 export async function loadGameItems() {
     const searchParams = new URLSearchParams()
+    searchParams.append('types[]', ITEM_TYPE_CURRENCY)
     searchParams.append('types[]', ITEM_TYPE_GRAIN_SEED)
     searchParams.append('types[]', ITEM_TYPE_GRAIN_CROP)
     searchParams.append('types[]', ITEM_TYPE_PROP)
     searchParams.append('types[]', ITEM_TYPE_TOOL)
+    searchParams.append('types[]', ITEM_TYPE_BLUEPRINT)
     searchParams.set('page_size', '1000')
 
     return api.get('api/item/list', {

@@ -61,6 +61,7 @@ defineProps<{
     ironCurrency: number
     herbCurrency: number
     fiberCurrency: number
+    hammerTool: number
   }
   claimLoading: boolean
   claimMode: boolean

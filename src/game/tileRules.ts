@@ -165,8 +165,11 @@ export function canHarvestCrop(tile: Tile, canFarm: (tile: Tile) => boolean) {
     return canFarm(tile) && Boolean(tile.plant) && Boolean(tile.landId) && canShowHarvestActionStatus(tile.cropStatus)
 }
 
-export function canAbandonTile(tile: Tile, tileAt: TileLookup) {
-    return tile.ownerType === 'player' && tile.terrain === 'field' && isAdjacentToOwner(tile, tileAt, 'player')
+export function canAbandonTile(tile: Tile, currentPlayerId: string | null | undefined) {
+    const playerId = currentPlayerId?.trim()
+    const ownerPlayerId = tile.ownerPlayerId?.trim()
+
+    return Boolean(playerId && ownerPlayerId && ownerPlayerId === playerId)
 }
 
 export function canRequestPurchase(tile: Tile, tileAt: TileLookup) {
