@@ -711,6 +711,7 @@ function setLandPlacementUi(enabled: boolean) {
   if (enabled) {
     resetActiveTool()
     closeToolBar()
+    if (landPlacementMode.value === 'pioneer') centerOnRandomMapPosition()
   } else {
     hideClaimPreview()
     resetClaimDialog()
@@ -1097,11 +1098,38 @@ function focusInitialHomeObject(object: MapObject) {
 
 function centerInitialMapFallback() {
   if (mainCanvasBounds.width > 0 && mainCanvasBounds.height > 0) {
-    mapNavigation.centerOnMapCenter()
+    if (landPlacementMode.value === 'pioneer') centerOnRandomMapPosition()
+    else mapNavigation.centerOnMapCenter()
     camera.ready = true
     mapNavigation.clampCamera(mainCanvasBounds.width, mainCanvasBounds.height)
   }
   requestDraw()
+}
+
+function centerOnRandomMapPosition() {
+  if (!mapReady.value || mainCanvasBounds.width <= 0 || mainCanvasBounds.height <= 0) return false
+
+  const viewportWorldWidth = mainCanvasBounds.width / camera.scale
+  const viewportWorldHeight = mainCanvasBounds.height / camera.scale
+  const worldX = getRandomViewportCenter(worldWidth.value, viewportWorldWidth)
+  const worldY = getRandomViewportCenter(worldHeight.value, viewportWorldHeight)
+
+  camera.x = mainCanvasBounds.width / 2 - worldX * camera.scale
+  camera.y = mainCanvasBounds.height / 2 - worldY * camera.scale
+  camera.ready = true
+  mapNavigation.clampCamera(mainCanvasBounds.width, mainCanvasBounds.height)
+
+  return true
+}
+
+function getRandomViewportCenter(worldLength: number, viewportWorldLength: number) {
+  if (worldLength <= 0) return 0
+
+  const halfViewport = Math.min(worldLength / 2, viewportWorldLength / 2)
+  const min = halfViewport
+  const max = Math.max(min, worldLength - halfViewport)
+
+  return min + Math.random() * (max - min)
 }
 
 function focusInitialHomeAnchor(anchor: { x: number; y: number; width: number; height: number }) {
@@ -1301,6 +1329,7 @@ function resetMapCanvasResizeObserver() {
 function handleCanvasResize() {
   if (!camera.ready && mapReady.value) {
     if (homeTile.value) mapNavigation.centerOnTile(homeTile.value)
+    else if (landPlacementMode.value === 'pioneer') centerOnRandomMapPosition()
     else mapNavigation.centerOnMapCenter()
     camera.ready = true
   }
